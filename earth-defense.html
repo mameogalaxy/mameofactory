@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>地球防衛ゲーム</title>
+    <style>
+        body { margin: 0; padding: 20px; background: #000; color: #fff; font-family: Arial; text-align: center; }
+        canvas { border: 2px solid #fff; background: linear-gradient(to bottom, #000428, #004e92); }
+        #gameInfo { display: flex; justify-content: space-around; font-size: 20px; margin: 10px; }
+        #gameInfo div { padding: 5px 15px; background: rgba(255,255,255,0.1); border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>地球防衛ゲーム</h1>
+    <div id="gameInfo">
+        <div id="score">スコア: 0</div>
+        <div id="lives">ライフ: 3</div>
+        <div id="level">レベル: 1</div>
+        <div id="weapon">武器: 通常</div>
+    </div>
+    <canvas id="game" width="800" height="600"></canvas>
+    <p>矢印キー: 移動 | スペース: 射撃 | パワーアップアイテムを取ろう！</p>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        
+        let score = 0;
+        let lives = 3;
+        let level = 1;
+        let gameRunning = true;
+        let weaponType = 'normal'; // normal, rapid, spread
+        let weaponTimer = 0;
+        let lastShot = 0;
+        
+        // プレイヤー
+        const player = { x: 375, y: 550, width: 50, height: 30, speed: 5 };
+        
+        // 弾丸
+        const bullets = [];
+        
+        // 敵
+        const enemies = [];
+        
+        // パワーアップアイテム
+        const powerups = [];
+        
+        // パーティクル効果
+        const particles = [];
+        
+        // キー入力
+        const keys = {};
+        
+        document.addEventListener('keydown', (e) => keys[e.code] = true);
+        document.addEventListener('keyup', (e) => keys[e.code] = false);
+        
+        // 弾丸発射
+        function shoot() {
+            const now = Date.now();
+            const shootDelay = weaponType === 'rapid' ? 100 : 200;
+            
+            if (now - lastShot < shootDelay) return;
+            lastShot = now;
+            
+            if (weaponType === 'spread') {
+                // 3方向に発射
+                bullets.push({ x: player.x + 20, y: player.y, width: 4, height: 10, speed: 7, dx: -1 });
+                bullets.push({ x: player.x + 20, y: player.y, width: 4, height: 10, speed: 7, dx: 0 });
+                bullets.push({ x: player.x + 20, y: player.y, width: 4, height: 10, speed: 7, dx: 1 });
+            } else {
+                bullets.push({ x: player.x + 20, y: player.y, width: 4, height: 10, speed: 7, dx: 0 });
+            }
+            
+            // 効果音（簡易版）
+            playSound(200, 0.1);
+        }
+        
+        // 敵生成
+        function spawnEnemy() {
+            const enemySpeed = 2 + Math.random() * 2 + level * 0.5;
+            enemies.push({ 
+                x: Math.random() * (canvas.width - 40), 
+                y: -40, 
+                width: 40, 
+                height: 30, 
+                speed: enemySpeed,
+                hp: level > 3 ? 2 : 1
+            });
+        }
+        
+        // パワーアップ生成
+        function spawnPowerup() {
+            const types = ['rapid', 'spread', 'life'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            powerups.push({
+                x: Math.random() * (canvas.width - 30),
+                y: -30,
+                width: 30,
+                height: 30,
+                speed: 3,
+                type: type
+            });
+        }
+        
+        // パーティクル生成
+        function createExplosion(x, y, color = '#ffff00') {
+            for (let i = 0; i < 8; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    dx: (Math.random() - 0.5) * 6,
+                    dy: (Math.random() - 0.5) * 6,
+                    life: 30,
+                    color: color
+                });
+            }
+        }
+        
+        // 効果音生成
+        function playSound(frequency, duration) {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+        
+        // 衝突判定
+        function collision(a, b) {
+            return a.x < b.x + b.width && a.x + a.width > b.x && 
+                   a.y < b.y + b.height && a.y + a.height > b.y;
+        }
+        
+        // 更新
+        function update() {
+            if (!gameRunning) return;
+            
+            // プレイヤー移動
+            if (keys['ArrowLeft'] && player.x > 0) player.x -= player.speed;
+            if (keys['ArrowRight'] && player.x < canvas.width - player.width) player.x += player.speed;
+            if (keys['ArrowUp'] && player.y > 0) player.y -= player.speed;
+            if (keys['ArrowDown'] && player.y < canvas.height - player.height) player.y += player.speed;
+            if (keys['Space']) shoot();
+            
+            // 弾丸更新
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                bullets[i].y -= bullets[i].speed;
+                bullets[i].x += bullets[i].dx * 2;
+                if (bullets[i].y < 0 || bullets[i].x < 0 || bullets[i].x > canvas.width) {
+                    bullets.splice(i, 1);
+                }
+            }
+            
+            // 敵更新
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                enemies[i].y += enemies[i].speed;
+                if (enemies[i].y > canvas.height) enemies.splice(i, 1);
+            }
+            
+            // パワーアップ更新
+            for (let i = powerups.length - 1; i >= 0; i--) {
+                powerups[i].y += powerups[i].speed;
+                if (powerups[i].y > canvas.height) powerups.splice(i, 1);
+            }
+            
+            // パーティクル更新
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].x += particles[i].dx;
+                particles[i].y += particles[i].dy;
+                particles[i].life--;
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+            
+            // 武器タイマー
+            if (weaponTimer > 0) {
+                weaponTimer--;
+                if (weaponTimer === 0) {
+                    weaponType = 'normal';
+                    document.getElementById('weapon').textContent = '武器: 通常';
+                }
+            }
+            
+            // 弾丸と敵の衝突
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    if (collision(bullets[i], enemies[j])) {
+                        bullets.splice(i, 1);
+                        enemies[j].hp--;
+                        
+                        if (enemies[j].hp <= 0) {
+                            createExplosion(enemies[j].x + 20, enemies[j].y + 15, '#ff4444');
+                            enemies.splice(j, 1);
+                            score += 10 * level;
+                            playSound(150, 0.2);
+                            
+                            // レベルアップチェック
+                            if (score >= level * 100) {
+                                level++;
+                                document.getElementById('level').textContent = `レベル: ${level}`;
+                                playSound(400, 0.5);
+                            }
+                        }
+                        
+                        document.getElementById('score').textContent = `スコア: ${score}`;
+                        break;
+                    }
+                }
+            }
+            
+            // プレイヤーとパワーアップの衝突
+            for (let i = powerups.length - 1; i >= 0; i--) {
+                if (collision(player, powerups[i])) {
+                    const powerup = powerups[i];
+                    powerups.splice(i, 1);
+                    
+                    if (powerup.type === 'life') {
+                        lives++;
+                        document.getElementById('lives').textContent = `ライフ: ${lives}`;
+                    } else {
+                        weaponType = powerup.type;
+                        weaponTimer = 600; // 10秒間
+                        const weaponNames = { rapid: '連射', spread: '拡散' };
+                        document.getElementById('weapon').textContent = `武器: ${weaponNames[powerup.type]}`;
+                    }
+                    
+                    playSound(300, 0.3);
+                    createExplosion(powerup.x + 15, powerup.y + 15, '#00ff00');
+                }
+            }
+            
+            // プレイヤーと敵の衝突
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                if (collision(player, enemies[i])) {
+                    enemies.splice(i, 1);
+                    lives--;
+                    document.getElementById('lives').textContent = `ライフ: ${lives}`;
+                    createExplosion(player.x + 25, player.y + 15, '#ff0000');
+                    playSound(100, 0.5);
+                    
+                    if (lives <= 0) {
+                        gameRunning = false;
+                        setTimeout(() => {
+                            alert(`ゲームオーバー！最終スコア: ${score}\nレベル: ${level}`);
+                            location.reload();
+                        }, 500);
+                    }
+                }
+            }
+            
+            // 敵生成
+            if (Math.random() < 0.02 + level * 0.005) spawnEnemy();
+            
+            // パワーアップ生成
+            if (Math.random() < 0.003) spawnPowerup();
+        }
+        
+        // 描画
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // プレイヤー描画
+            ctx.fillStyle = '#00ff00';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            ctx.fillStyle = '#ffff00';
+            ctx.fillRect(player.x + 15, player.y - 10, 20, 10);
+            
+            // 弾丸描画
+            ctx.fillStyle = '#ffff00';
+            bullets.forEach(bullet => ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height));
+            
+            // 敵描画
+            enemies.forEach(enemy => {
+                ctx.fillStyle = enemy.hp > 1 ? '#ff4444' : '#ff0000';
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                if (enemy.hp > 1) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(enemy.x + 15, enemy.y + 10, 10, 4);
+                }
+            });
+            
+            // パワーアップ描画
+            powerups.forEach(powerup => {
+                const colors = { rapid: '#00ff00', spread: '#0088ff', life: '#ff00ff' };
+                ctx.fillStyle = colors[powerup.type];
+                ctx.fillRect(powerup.x, powerup.y, powerup.width, powerup.height);
+                
+                // アイコン描画
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                const icons = { rapid: 'R', spread: 'S', life: '+' };
+                ctx.fillText(icons[powerup.type], powerup.x + 15, powerup.y + 20);
+            });
+            
+            // パーティクル描画
+            particles.forEach(particle => {
+                ctx.fillStyle = particle.color;
+                ctx.globalAlpha = particle.life / 30;
+                ctx.fillRect(particle.x, particle.y, 3, 3);
+            });
+            ctx.globalAlpha = 1;
+        }
+        
+        // ゲームループ
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        gameLoop();
+    </script>
+</body>
+</html>

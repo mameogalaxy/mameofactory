@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>スライムコレクター</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #1a1a1a;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        font-family: "Arial", sans-serif;
+      }
+      canvas {
+        background: #2a2a2a;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+      }
+      #gameUI {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        right: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px;
+        color: white;
+        font-size: 1.2em;
+      }
+      #scoreBoard {
+        background: rgba(0, 0, 0, 0.7);
+        padding: 10px 20px;
+        border-radius: 20px;
+      }
+      #gameOver {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.9);
+        padding: 30px;
+        border-radius: 15px;
+        text-align: center;
+        color: white;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="gameUI">
+      <div id="scoreBoard">
+        スコア: <span id="score">0</span> 時間: <span id="timer">60</span>秒
+      </div>
+    </div>
+    <div id="gameOver">
+      <h2>ゲームオーバー</h2>
+      <p>最終スコア: <span id="finalScore">0</span></p>
+      <button onclick="restartGame()">もう一度プレイ</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script>
+      let score = 0;
+      let timeLeft = 60;
+      let gameActive = true;
+      let targetZone = null;
+      let targetTimer = null;
+
+      const Engine = Matter.Engine,
+        Render = Matter.Render,
+        World = Matter.World,
+        Bodies = Matter.Bodies,
+        Body = Matter.Body,
+        Composite = Matter.Composite,
+        Mouse = Matter.Mouse,
+        MouseConstraint = Matter.MouseConstraint;
+
+      const engine = Engine.create({
+        gravity: { x: 0, y: 1, scale: 0.001 },
+      });
+      const world = engine.world;
+
+      const render = Render.create({
+        element: document.body,
+        engine: engine,
+        options: {
+          width: 800,
+          height: 600,
+          wireframes: false,
+          background: "#2a2a2a",
+        },
+      });
+
+      // 壁の作成
+      const walls = [
+        Bodies.rectangle(400, 610, 810, 60, {
+          isStatic: true,
+          render: { fillStyle: "#444" },
+        }),
+        Bodies.rectangle(400, -10, 810, 60, {
+          isStatic: true,
+          render: { fillStyle: "#444" },
+        }),
+        Bodies.rectangle(-10, 300, 60, 610, {
+          isStatic: true,
+          render: { fillStyle: "#444" },
+        }),
+        Bodies.rectangle(810, 300, 60, 610, {
+          isStatic: true,
+          render: { fillStyle: "#444" },
+        }),
+      ];
+
+      World.add(world, walls);
+
+      // マウス制御
+      const mouse = Mouse.create(render.canvas);
+      const mouseConstraint = MouseConstraint.create(engine, {
+        mouse: mouse,
+        constraint: {
+          stiffness: 0.2,
+          render: { visible: false },
+        },
+      });
+
+      World.add(world, mouseConstraint);
+      render.mouse = mouse;
+
+      // スライム生成関数
+      function createSlime(x, y) {
+        const color = `hsl(${Math.random() * 360}, 80%, 60%)`;
+        const slime = Bodies.circle(x, y, 15, {
+          restitution: 0.5,
+          friction: 0.1,
+          render: {
+            fillStyle: color,
+            opacity: 0.8,
+          },
+          label: "slime",
+        });
+        return slime;
+      }
+
+      // ターゲットゾーン生成
+      function createTargetZone() {
+        if (targetZone) {
+          World.remove(world, targetZone);
+        }
+
+        const x = 100 + Math.random() * 600;
+        const y = 100 + Math.random() * 400;
+
+        targetZone = Bodies.rectangle(x, y, 100, 100, {
+          isSensor: true,
+          isStatic: true,
+          render: {
+            fillStyle: "rgba(74, 144, 226, 0.3)",
+            strokeStyle: "#4a90e2",
+            lineWidth: 2,
+          },
+          label: "targetZone",
+        });
+
+        World.add(world, targetZone);
+
+        // 一定時間後にターゲットゾーンを移動
+        clearTimeout(targetTimer);
+        targetTimer = setTimeout(createTargetZone, 5000);
+      }
+
+      // 衝突検出
+      Matter.Events.on(engine, "collisionStart", (event) => {
+        event.pairs.forEach((pair) => {
+          const bodyA = pair.bodyA;
+          const bodyB = pair.bodyB;
+
+          if (
+            (bodyA.label === "slime" && bodyB.label === "targetZone") ||
+            (bodyB.label === "slime" && bodyA.label === "targetZone")
+          ) {
+            // スコア加算
+            score += 10;
+            document.getElementById("score").textContent = score;
+
+            // スライムを消去
+            const slime = bodyA.label === "slime" ? bodyA : bodyB;
+            World.remove(world, slime);
+
+            // 新しいスライムを生成
+            const newSlime = createSlime(Math.random() * 700 + 50, 50);
+            World.add(world, newSlime);
+          }
+        });
+      });
+
+      // ゲーム開始時の初期化
+      function startGame() {
+        score = 0;
+        timeLeft = 60;
+        gameActive = true;
+        document.getElementById("score").textContent = score;
+        document.getElementById("timer").textContent = timeLeft;
+        document.getElementById("gameOver").style.display = "none";
+
+        // 初期スライム生成
+        for (let i = 0; i < 5; i++) {
+          const slime = createSlime(
+            Math.random() * 700 + 50,
+            Math.random() * 300 + 50
+          );
+          World.add(world, slime);
+        }
+
+        createTargetZone();
+
+        // タイマー開始
+        const timerInterval = setInterval(() => {
+          if (!gameActive) {
+            clearInterval(timerInterval);
+            return;
+          }
+
+          timeLeft--;
+          document.getElementById("timer").textContent = timeLeft;
+
+          if (timeLeft <= 0) {
+            gameActive = false;
+            document.getElementById("finalScore").textContent = score;
+            document.getElementById("gameOver").style.display = "block";
+            clearInterval(timerInterval);
+          }
+        }, 1000);
+      }
+
+      // リスタート関数
+      window.restartGame = function () {
+        // 全てのスライムを削除
+        const bodies = Composite.allBodies(world);
+        bodies.forEach((body) => {
+          if (body.label === "slime") {
+            World.remove(world, body);
+          }
+        });
+
+        if (targetZone) {
+          World.remove(world, targetZone);
+        }
+
+        startGame();
+      };
+
+      // エンジン開始
+      Engine.run(engine);
+      Render.run(render);
+
+      // ゲーム開始
+      startGame();
+    </script>
+  </body>
+</html>

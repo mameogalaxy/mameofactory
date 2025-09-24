@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+    />
+    <title>Dream Monster - PARASOL OCEAN</title>
+    <style>
+      /* 基本設定 */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        touch-action: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        font-family: "Courier New", monospace;
+        background: transparent;
+      }
+
+      /* --- 昇華された背景 --- */
+      #css-background {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -2;
+        overflow: hidden;
+        /* Removed embedded base64 PNG; gradient only */
+        background: linear-gradient(
+          to bottom,
+          #4a90e2 0%,
+          #63c8f2 30%,
+          #87ceeb 60%,
+          #20b2aa 80%,
+          #f4a460 100%
+        );
+      }
+
+      /* 装飾的なフレーム */
+      #css-background::before {
+        content: "";
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        border: 3px solid rgba(255, 255, 255, 0.8);
+        border-image: linear-gradient(
+            45deg,
+            rgba(255, 255, 255, 0.9),
+            rgba(135, 206, 235, 0.7),
+            rgba(255, 255, 255, 0.9)
+          )
+          1;
+        pointer-events: none;
+      }
+
+      /* 装飾的な角 */
+      #css-background::after {
+        content: "";
+        position: absolute;
+        top: 5px;
+        left: 5px;
+        right: 5px;
+        bottom: 5px;
+        background: linear-gradient(
+            45deg,
+            rgba(255, 255, 255, 0.6) 0%,
+            transparent 15%
+          ),
+          linear-gradient(-45deg, rgba(255, 255, 255, 0.6) 0%, transparent 15%),
+          linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, transparent 15%),
+          linear-gradient(-135deg, rgba(255, 255, 255, 0.6) 0%, transparent 15%);
+        background-size: 30px 30px;
+        background-position: top left, top right, bottom left, bottom right;
+        background-repeat: no-repeat;
+        pointer-events: none;
+      }
+
+      .cloud {
+        position: absolute;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 50%;
+        opacity: 0.8;
+        animation: move-clouds-back linear infinite;
+        z-index: -1;
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+      }
+
+      .cloud:before,
+      .cloud:after {
+        content: "";
+        position: absolute;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 50%;
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+      }
+
+      .cloud.c1 {
+        top: 10%;
+        left: -20%;
+        width: 200px;
+        height: 60px;
+        animation-duration: 40s;
+      }
+      .cloud.c1:before {
+        top: -30px;
+        left: 30px;
+        width: 100px;
+        height: 100px;
+      }
+      .cloud.c1:after {
+        top: -50px;
+        right: 40px;
+        width: 120px;
+        height: 120px;
+      }
+
+      .cloud.c2 {
+        top: 25%;
+        left: -30%;
+        width: 300px;
+        height: 80px;
+        animation-duration: 60s;
+        animation-delay: -15s;
+      }
+      .cloud.c2:before {
+        top: -40px;
+        left: 50px;
+        width: 130px;
+        height: 130px;
+      }
+      .cloud.c2:after {
+        top: -60px;
+        right: 60px;
+        width: 150px;
+        height: 150px;
+      }
+
+      .cloud.c3 {
+        top: 5%;
+        left: -25%;
+        width: 250px;
+        height: 70px;
+        animation-duration: 80s;
+        animation-delay: -30s;
+      }
+      .cloud.c3:before {
+        top: -35px;
+        left: 40px;
+        width: 110px;
+        height: 110px;
+      }
+      .cloud.c3:after {
+        top: -55px;
+        right: 50px;
+        width: 140px;
+        height: 140px;
+      }
+
+      @keyframes move-clouds-back {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(calc(100vw + 300px));
+        }
+      }
+
+      #sand {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 20%;
+        background: linear-gradient(
+          to bottom,
+          #f4a460 0%,
+          #deb887 50%,
+          #d2b48c 100%
+        );
+        z-index: 0;
+        box-shadow: inset 0 10px 20px rgba(0, 0, 0, 0.1);
+      }
+
+      .wave {
+        position: absolute;
+        bottom: 18%;
+        left: -100%;
+        width: 200%;
+        height: 100px;
+        background-size: 50% 100px;
+        opacity: 0.7;
+        animation: wave-animation linear infinite;
+        z-index: 1;
+      }
+
+      .wave.w1 {
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 100"><path d="M0 50 C250 100, 250 0, 500 50 S750 100, 1000 50 Z" fill="rgba(255,255,255,0.6 )"></path></svg>');
+        animation-duration: 10s;
+      }
+
+      .wave.w2 {
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 100"><path d="M0 60 C200 120, 300 0, 500 60 S700 120, 1000 60 Z" fill="rgba(255,255,255,0.5 )"></path></svg>');
+        animation-duration: 15s;
+        animation-delay: -2s;
+      }
+
+      @keyframes wave-animation {
+        0% {
+          transform: translateX(0);
+        }
+        100% {
+          transform: translateX(50%);
+        }
+      }
+
+      /* タイトル画面の昇華 */
+      #titleScreen {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.15);
+        color: white;
+        text-align: center;
+        position: relative;
+        z-index: 10;
+        pointer-events: auto;
+      }
+
+      #titleLogo h1 {
+        font-size: 12vw;
+        margin: 0;
+        font-weight: bold;
+        background: linear-gradient(
+          45deg,
+          #ffd700,
+          #fff,
+          #87ceeb,
+          #fff,
+          #ffd700
+        );
+        background-size: 300% 300%;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: shimmer 3s ease-in-out infinite;
+        text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+        filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
+      }
+
+      @keyframes shimmer {
+        0%,
+        100% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+      }
+
+      #titleLogo p {
+        font-size: 5vw;
+        margin: 0 0 8vh 0;
+        color: rgba(255, 255, 255, 0.95);
+        text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.7);
+        font-weight: bold;
+        letter-spacing: 2px;
+      }
+
+      #instructions {
+        background: linear-gradient(
+          135deg,
+          rgba(32, 178, 170, 0.3),
+          rgba(135, 206, 235, 0.3)
+        );
+        padding: 3vh 6vw;
+        border-radius: 20px;
+        margin-bottom: 6vh;
+        max-width: 90%;
+        border: 2px solid rgba(255, 255, 255, 0.4);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      }
+
+      #instructions h2 {
+        font-size: 5vw;
+        margin: 0 0 2vh 0;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.6);
+        padding-bottom: 1vh;
+        color: #ffd700;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+      }
+
+      #instructions p {
+        font-size: 3.5vw;
+        margin: 1.5vh 0;
+        text-align: left;
+        color: rgba(255, 255, 255, 0.95);
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.6);
+      }
+
+      #startButton {
+        font-size: 7vw;
+        font-weight: bold;
+        color: #fff;
+        background: linear-gradient(145deg, #20b2aa, #4a90e2, #63c8f2);
+        border: none;
+        padding: 3vh 12vw;
+        border-radius: 50px;
+        cursor: pointer;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+        transition: all 0.2s ease;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        position: relative;
+        overflow: hidden;
+        pointer-events: auto;
+      }
+
+      #startButton::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.3),
+          transparent
+        );
+        transition: left 0.5s;
+      }
+
+      #startButton:hover::before {
+        left: 100%;
+      }
+
+      #startButton:active {
+        transform: translateY(4px);
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
+      }
+
+      /* ゲーム画面の昇華 */
+      #gameArea {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: transparent;
+        display: none;
+        -webkit-touch-callout: none;
+        pointer-events: auto;
+      }
+
+      #backgroundCanvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 2;
+        touch-action: none;
+        image-rendering: optimizeSpeed;
+      }
+
+      #player {
+        position: absolute;
+        z-index: 4;
+        -webkit-user-drag: none;
+        user-select: none;
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+        touch-action: none;
+        filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+      }
+
+      #gameOverText {
+        display: none;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 8vw;
+        color: #ff6b6b;
+        text-align: center;
+        font-family: "Courier New", monospace;
+        font-weight: bold;
+        z-index: 10;
+        text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8);
+        background: rgba(0, 0, 0, 0.7);
+        padding: 4vh 8vw;
+        border-radius: 20px;
+        border: 3px solid rgba(255, 107, 107, 0.5);
+      }
+
+      #scoreText {
+        position: absolute;
+        top: 30px;
+        right: 30px;
+        font-size: 4vw;
+        color: #ffd700;
+        font-family: "Courier New", monospace;
+        font-weight: bold;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        z-index: 10;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 1vh 2vw;
+        border-radius: 10px;
+        border: 2px solid rgba(255, 215, 0, 0.3);
+      }
+
+      /* HPゲージ用のスタイル */
+      #hpDisplay {
+        position: absolute;
+        top: 30px;
+        left: 30px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 1vh 2vw;
+        border-radius: 10px;
+        border: 2px solid rgba(32, 178, 170, 0.5);
+      }
+
+      .hp-heart {
+        width: 6vw;
+        height: 6vw;
+        margin-right: 1vw;
+        background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FF6B6B"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>')
+          center/contain no-repeat;
+        filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.5));
+      }
+
+      .hp-heart.empty {
+        background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23666"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>')
+          center/contain no-repeat;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- BGM element (follow audio policy) -->
+    <audio
+      id="bgm"
+      src="https://mameogalaxy.github.io/mameofactory/supergame.mp3"
+      preload="none"
+      loop
+      playsinline
+      hidden
+    ></audio>
+
+    <!-- 昇華された背景 -->
+    <div id="css-background">
+      <div class="cloud c1"></div>
+      <div class="cloud c2"></div>
+      <div class="cloud c3"></div>
+      <div id="sand"></div>
+      <div class="wave w1"></div>
+      <div class="wave w2"></div>
+    </div>
+
+    <!-- タイトル画面 -->
+    <div id="titleScreen">
+      <div id="titleLogo">
+        <h1>Dream Monster</h1>
+        <p>PARASOL OCEAN</p>
+      </div>
+      <div id="instructions">
+        <h2>- 操作方法 -</h2>
+        <p>▶ 左側タップ：ジャンプ</p>
+        <p>▶ 右側タップ：攻撃</p>
+        <p>▶ ドラッグ：左右に移動</p>
+      </div>
+      <button id="startButton">START</button>
+    </div>
+
+    <!-- ゲーム画面 -->
+    <div id="gameArea">
+      <canvas id="backgroundCanvas"></canvas>
+      <img
+        id="player"
+        src="https://github.com/mameogalaxy/mameofactory/raw/refs/heads/main/IMG_2945.gif"
+        alt="player"
+        loading="auto"
+      />
+      <div id="hpDisplay">
+        <div class="hp-heart" id="heart1"></div>
+        <div class="hp-heart" id="heart2"></div>
+        <div class="hp-heart" id="heart3"></div>
+        <div class="hp-heart" id="heart4"></div>
+        <div class="hp-heart" id="heart5"></div>
+      </div>
+      <div id="gameOverText">
+        GAME OVER <span style="font-size: 4vw">Tap to Restart</span>
+      </div>
+      <div id="scoreText">SCORE: 0</div>
+    </div>
+
+    <script>
+      (function () {
+        // --- Assets & DOM ---
+        const bgmEl = document.getElementById("bgm");
+        let isBgmPlaying = false;
+
+        // Web Audio API for reliable sound effects
+        let audioContext;
+        
+        function initAudio() {
+          if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          if (audioContext.state === 'suspended') {
+            audioContext.resume();
+          }
+        }
+        
+        function playTone(frequency, duration, type = 'sine', volume = 0.3) {
+          if (!audioContext) initAudio();
+          
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+          oscillator.type = type;
+          
+          gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+          gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+          
+          oscillator.start(audioContext.currentTime);
+          oscillator.stop(audioContext.currentTime + duration);
+        }
+        
+        const sfx = {
+          jump: () => playTone(440, 0.2, 'square', 0.4),
+          shoot: () => playTone(800, 0.1, 'sawtooth', 0.3),
+          hit: () => playTone(200, 0.15, 'square', 0.5),
+          damage: () => playTone(150, 0.3, 'sawtooth', 0.4),
+          heal: () => {
+            playTone(523, 0.1, 'sine', 0.3);
+            setTimeout(() => playTone(659, 0.1, 'sine', 0.3), 100);
+            setTimeout(() => playTone(784, 0.2, 'sine', 0.3), 200);
+          },
+          gameOver: () => {
+            playTone(220, 0.5, 'sawtooth', 0.4);
+            setTimeout(() => playTone(196, 0.8, 'sawtooth', 0.4), 300);
+          }
+        };
+        
+        function playSfx(sound) {
+          try {
+            sound();
+          } catch (err) {
+            console.log('Sound error:', err);
+          }
+        }
+
+        const enemyImageSrc =
+          "https://mameogalaxy.github.io/mameofactory/IMG_2950.gif";
+
+        const titleScreen = document.getElementById("titleScreen");
+        const startButton = document.getElementById("startButton");
+        const gameArea = document.getElementById("gameArea");
+        const canvas = document.getElementById("backgroundCanvas");
+        const ctx = canvas.getContext("2d");
+        const playerElement = document.getElementById("player");
+        const gameOverText = document.getElementById("gameOverText");
+        const scoreText = document.getElementById("scoreText");
+        const hpDisplay = document.getElementById("hpDisplay");
+
+        // --- Constants & state ---
+        const PLAYER_ASPECT = 1.5;
+        const TAP_DURATION_THRESHOLD = 200;
+
+        const gameState = {
+          player: {
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+            velocityY: 0,
+            isJumping: false,
+            health: 5,
+            maxHealth: 5,
+          },
+          stage: { speed: 0, groundY: 0, gravity: 0, jumpPower: 0 },
+          enemies: [],
+          enemyProjectiles: [], // enemy bullets
+          healItems: [],
+          waterJets: [],
+          isGameOver: false,
+          shootCooldown: 0,
+          score: 0,
+          healSpawnedAtLowHP: false,
+          isShootingHold: false,
+        };
+
+        // touch tracking
+        let activeTouchId = null;
+        let touchStartTime = 0;
+        let isDragging = false;
+        let dragStartX = 0;
+        let lastTapTarget = { x: 0, y: 0 };
+        let gameInitialized = false;
+
+        // --- HP Display Update ---
+        function updateHPDisplay() {
+          for (let i = 1; i <= 5; i++) {
+            const heart = document.getElementById(`heart${i}`);
+            if (i <= gameState.player.health) {
+              heart.classList.remove("empty");
+            } else {
+              heart.classList.add("empty");
+            }
+          }
+        }
+
+        // --- Layout & Initialization ---
+        function resize() {
+          canvas.width = window.innerWidth;
+          canvas.height = window.innerHeight;
+          updateGameScale();
+        }
+
+        function updateGameScale() {
+          const { player, stage } = gameState;
+          stage.speed = canvas.width * 0.005;
+          stage.groundY = canvas.height * 0.8;
+          stage.jumpPower = -canvas.height * 0.05;
+          stage.gravity = canvas.height * 0.0025;
+          player.height = canvas.height * 0.3;
+          player.width = player.height * PLAYER_ASPECT;
+          player.x = -canvas.width * 0.15;
+          // Ensure player y sits on ground after scale changes
+          if (!player.y) player.y = stage.groundY - player.height;
+          playerElement.style.width = Math.round(player.width) + "px";
+          playerElement.style.height = Math.round(player.height) + "px";
+          playerElement.style.left = Math.round(player.x) + "px";
+          playerElement.style.top = Math.round(player.y) + "px";
+        }
+
+        // --- Shooting & Touch Handlers ---
+        function fireWaterJet(targetX, targetY) {
+          if (gameState.shootCooldown > 0) return;
+          playSfx(sfx.shoot);
+          const jetStart = {
+            x: gameState.player.x + gameState.player.width * 0.6,
+            y: gameState.player.y + gameState.player.height * 0.45,
+          };
+          const angle = Math.atan2(targetY - jetStart.y, targetX - jetStart.x);
+          const speed = gameState.stage.speed * 3;
+          gameState.waterJets.push({
+            x: jetStart.x,
+            y: jetStart.y,
+            width: 25,
+            height: 12,
+            speedX: Math.cos(angle) * speed,
+            speedY: Math.sin(angle) * speed,
+            angle: angle,
+          });
+          gameState.shootCooldown = 10;
+          console.log("Fire jet", {
+            x: jetStart.x,
+            y: jetStart.y,
+            angle: angle,
+            speed,
+          });
+        }
+
+        function handleTouchStart(e) {
+          // only prevent default for gameplay surface interactions
+          e.preventDefault();
+          // If game over: show title and clear elements
+          if (gameState.isGameOver) {
+            titleScreen.style.display = "flex";
+            gameArea.style.display = "none";
+            try {
+              bgmEl.pause();
+              bgmEl.currentTime = 0;
+            } catch (err) {}
+            isBgmPlaying = false;
+            // remove enemy DOM nodes safely
+            gameState.enemies.forEach((en) => {
+              try {
+                if (en.element && en.element.remove) en.element.remove();
+              } catch (e) {}
+            });
+            gameState.enemies = [];
+            gameState.waterJets = [];
+            gameState.enemyProjectiles = [];
+            gameState.healItems = [];
+            console.log("Game over tapped: cleared entities");
+            return;
+          }
+          // Track touch identifier for single-finger control
+          const changed = e.changedTouches;
+          if (!changed || changed.length === 0) return;
+          const t = changed[0];
+          if (!t) return;
+          activeTouchId = t.identifier;
+          touchStartTime = Date.now();
+          dragStartX = t.clientX;
+          isDragging = false;
+          // right-half touch -> start aiming/shoot-hold
+          if (t.clientX >= canvas.width / 2) {
+            gameState.isShootingHold = true;
+            lastTapTarget.x = t.clientX;
+            lastTapTarget.y = t.clientY;
+          }
+          console.log(
+            "touchstart id",
+            activeTouchId,
+            "x",
+            t.clientX,
+            "y",
+            t.clientY
+          );
+        }
+
+        function handleTouchMove(e) {
+          e.preventDefault();
+          if (gameState.isGameOver || activeTouchId === null) return;
+          let touch = null;
+          for (let i = 0; i < e.touches.length; i++) {
+            if (e.touches[i].identifier === activeTouchId) {
+              touch = e.touches[i];
+              break;
+            }
+          }
+          if (!touch) return;
+          const currentX = touch.clientX;
+          const deltaX = currentX - dragStartX;
+          if (Math.abs(deltaX) > 10) {
+            isDragging = true;
+            gameState.isShootingHold = false;
+            const minX = -canvas.width * 0.3;
+            const maxX = canvas.width * 0.1;
+            gameState.player.x += deltaX * 0.8;
+            gameState.player.x = Math.max(
+              minX,
+              Math.min(maxX, gameState.player.x)
+            );
+            playerElement.style.left = Math.round(gameState.player.x) + "px";
+            dragStartX = currentX;
+            console.log("drag move, player.x:", gameState.player.x);
+          }
+        }
+
+        function handleTouchEnd(e) {
+          e.preventDefault();
+          if (activeTouchId === null) return;
+          let endedTouch = null;
+          for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === activeTouchId) {
+              endedTouch = e.changedTouches[i];
+              break;
+            }
+          }
+          if (!endedTouch) return;
+          const touchDuration = Date.now() - touchStartTime;
+          if (touchDuration < TAP_DURATION_THRESHOLD && !isDragging) {
+            const t = endedTouch;
+            if (t.clientX < canvas.width / 2) {
+              if (!gameState.player.isJumping) {
+                playSfx(sfx.jump);
+                gameState.player.velocityY = gameState.stage.jumpPower;
+                gameState.player.isJumping = true;
+                console.log("Jump triggered", {
+                  velocityY: gameState.player.velocityY,
+                });
+              }
+            } else {
+              fireWaterJet(t.clientX, t.clientY);
+            }
+          }
+          isDragging = false;
+          activeTouchId = null;
+          gameState.isShootingHold = false;
+          console.log("touchend");
+        }
+
+        // --- Game Logic Loop ---
+        function updateState() {
+          const { player, stage } = gameState;
+          const currentGroundY = stage.groundY - player.height;
+          player.velocityY += stage.gravity;
+          const nextY = player.y + player.velocityY;
+          if (nextY >= currentGroundY) {
+            player.y = currentGroundY;
+            player.velocityY = 0;
+            player.isJumping = false;
+          } else {
+            player.y = nextY;
+          }
+          if (player.y < 0) {
+            player.y = 0;
+            player.velocityY = 0;
+          }
+          playerElement.style.top = Math.round(player.y) + "px";
+
+          if (gameState.isShootingHold) {
+            // reduce cooldown gradually while holding and attempt continuous fire
+            if (gameState.shootCooldown > 0) gameState.shootCooldown -= 0.5;
+            fireWaterJet(lastTapTarget.x, lastTapTarget.y);
+          }
+          if (gameState.shootCooldown > 0) gameState.shootCooldown--;
+
+          // move jets
+          gameState.waterJets.forEach((jet) => {
+            jet.x += jet.speedX;
+            jet.y += jet.speedY;
+          });
+          gameState.waterJets = gameState.waterJets.filter(
+            (jet) =>
+              jet.x < canvas.width + 200 &&
+              jet.x > -200 &&
+              jet.y < canvas.height + 200 &&
+              jet.y > -200
+          );
+
+          // enemy spawn rate increases with score
+          const difficultyLevel = Math.floor(gameState.score / 500);
+          const spawnRate = 0.01 + difficultyLevel * 0.004;
+          if (Math.random() < spawnRate) {
+            const maxJumpHeight =
+              (Math.abs(stage.jumpPower) * Math.abs(stage.jumpPower)) /
+              (2 * stage.gravity);
+            const minEnemyY = Math.max(
+              stage.groundY - maxJumpHeight,
+              canvas.height * 0.1
+            );
+            const maxEnemyY = stage.groundY - 80;
+            const enemySize = 60;
+            const enemy = {
+              x: canvas.width + 100,
+              y: minEnemyY + Math.random() * Math.max(0, maxEnemyY - minEnemyY),
+              width: enemySize,
+              height: enemySize,
+              speed: stage.speed * (1.2 + difficultyLevel * 0.1),
+              element: document.createElement("img"),
+              shootCooldown: 120 + Math.random() * 60,
+            };
+            enemy.element.src = enemyImageSrc;
+            enemy.element.style.position = "absolute";
+            enemy.element.style.width = enemy.width + "px";
+            enemy.element.style.height = enemy.height + "px";
+            enemy.element.style.left = enemy.x + "px";
+            enemy.element.style.top = enemy.y + "px";
+            enemy.element.style.zIndex = "3";
+            // fixed image-rendering assignment (previously broken string caused syntax error)
+            enemy.element.style.imageRendering = "crisp-edges";
+            try {
+              enemy.element.style.setProperty(
+                "-webkit-image-rendering",
+                "crisp-edges"
+              );
+            } catch (e) {}
+            enemy.element.loading = "eager";
+            try {
+              enemy.element.decoding = "sync";
+            } catch (e) {}
+            gameArea.appendChild(enemy.element);
+            gameState.enemies.push(enemy);
+            console.log("Spawn enemy", {
+              x: enemy.x,
+              y: enemy.y,
+              speed: enemy.speed,
+              shootCooldown: enemy.shootCooldown,
+            });
+          }
+
+          // update enemies & their shooting behavior
+          gameState.enemies.forEach((enemy) => {
+            enemy.x -= enemy.speed;
+            if (enemy.element)
+              enemy.element.style.left = Math.round(enemy.x) + "px";
+
+            enemy.shootCooldown--;
+            if (
+              enemy.shootCooldown <= 0 &&
+              enemy.x < canvas.width &&
+              enemy.x > 0
+            ) {
+              const projectileStart = {
+                x: enemy.x + enemy.width / 2,
+                y: enemy.y + enemy.height / 2,
+              };
+              const playerCenter = {
+                x: player.x + player.width / 2,
+                y: player.y + player.height / 2,
+              };
+              const angle = Math.atan2(
+                playerCenter.y - projectileStart.y,
+                playerCenter.x - projectileStart.x
+              );
+              const speed = stage.speed * 2;
+              gameState.enemyProjectiles.push({
+                x: projectileStart.x,
+                y: projectileStart.y,
+                width: 15,
+                height: 15,
+                speedX: Math.cos(angle) * speed,
+                speedY: Math.sin(angle) * speed,
+              });
+              enemy.shootCooldown = 150 + Math.random() * 100;
+              // small debug log
+              console.log("Enemy fired projectile", {
+                ex: enemy.x,
+                ey: enemy.y,
+                angle,
+              });
+            }
+          });
+
+          // enemy projectiles move
+          gameState.enemyProjectiles.forEach((proj) => {
+            proj.x += proj.speedX;
+            proj.y += proj.speedY;
+          });
+          gameState.enemyProjectiles = gameState.enemyProjectiles.filter(
+            (proj) =>
+              proj.x > -20 &&
+              proj.x < canvas.width + 20 &&
+              proj.y > -20 &&
+              proj.y < canvas.height + 20
+          );
+
+          // spawn heal item occasionally when low HP
+          if (
+            gameState.player.health <= 2 &&
+            !gameState.healSpawnedAtLowHP &&
+            Math.random() < 0.01
+          ) {
+            const healItem = {
+              x: canvas.width + 50,
+              y: stage.groundY - 150,
+              width: 40,
+              height: 40,
+              speed: stage.speed * 0.8,
+            };
+            gameState.healItems.push(healItem);
+            gameState.healSpawnedAtLowHP = true;
+            console.log("Spawn heal item");
+          }
+
+          // water jet hits enemy
+          for (let ji = gameState.waterJets.length - 1; ji >= 0; ji--) {
+            const jet = gameState.waterJets[ji];
+            for (let ei = gameState.enemies.length - 1; ei >= 0; ei--) {
+              const enemy = gameState.enemies[ei];
+              if (
+                jet.x < enemy.x + enemy.width &&
+                jet.x + jet.width > enemy.x &&
+                jet.y < enemy.y + enemy.height &&
+                jet.y + jet.height > enemy.y
+              ) {
+                playSfx(sfx.hit);
+                try {
+                  if (enemy.element && enemy.element.remove)
+                    enemy.element.remove();
+                } catch (e) {}
+                gameState.enemies.splice(ei, 1);
+                gameState.waterJets.splice(ji, 1);
+                gameState.score += 100;
+                scoreText.textContent = `SCORE: ${gameState.score}`;
+                break;
+              }
+            }
+          }
+
+          // remove off-screen enemies
+          gameState.enemies = gameState.enemies.filter((enemy) => {
+            if (enemy.x > -enemy.width - 100) {
+              return true;
+            } else {
+              try {
+                if (enemy.element) enemy.element.remove();
+              } catch (e) {}
+              return false;
+            }
+          });
+
+          const playerHitbox = {
+            x: player.x + player.width * 0.4,
+            y: player.y + player.height * 0.2,
+            width: player.width * 0.35,
+            height: player.height * 0.6,
+          };
+
+          // enemy collisions with player
+          for (let ei = gameState.enemies.length - 1; ei >= 0; ei--) {
+            const enemy = gameState.enemies[ei];
+            const enemyHitbox = {
+              x: enemy.x + enemy.width * 0.2,
+              y: enemy.y,
+              width: enemy.width * 0.6,
+              height: enemy.height * 0.9,
+            };
+            if (
+              playerHitbox.x < enemyHitbox.x + enemyHitbox.width &&
+              playerHitbox.x + playerHitbox.width > enemyHitbox.x &&
+              playerHitbox.y < enemyHitbox.y + enemyHitbox.height &&
+              playerHitbox.y + playerHitbox.height > enemyHitbox.y
+            ) {
+              playSfx(sfx.damage);
+              try {
+                if (enemy.element && enemy.element.remove)
+                  enemy.element.remove();
+              } catch (e) {}
+              gameState.enemies.splice(ei, 1);
+              gameState.player.health--;
+              updateHPDisplay();
+              console.log("Player hit by enemy. HP:", gameState.player.health);
+              if (gameState.player.health <= 0) {
+                playSfx(sfx.gameOver);
+                gameState.isGameOver = true;
+                gameOverText.style.display = "block";
+                console.log("Game Over by enemy collision");
+              }
+            }
+          }
+
+          // enemy projectile collisions
+          for (let i = gameState.enemyProjectiles.length - 1; i >= 0; i--) {
+            const proj = gameState.enemyProjectiles[i];
+            if (
+              playerHitbox.x < proj.x + proj.width &&
+              playerHitbox.x + playerHitbox.width > proj.x &&
+              playerHitbox.y < proj.y + proj.height &&
+              playerHitbox.y + playerHitbox.height > proj.y
+            ) {
+              playSfx(sfx.damage);
+              gameState.enemyProjectiles.splice(i, 1);
+              gameState.player.health--;
+              updateHPDisplay();
+              console.log(
+                "Player hit by projectile. HP:",
+                gameState.player.health
+              );
+              if (gameState.player.health <= 0) {
+                playSfx(sfx.gameOver);
+                gameState.isGameOver = true;
+                gameOverText.style.display = "block";
+                console.log("Game Over by projectile");
+              }
+              break;
+            }
+          }
+
+          // heal item movement and pickup
+          if (gameState.healItems) {
+            gameState.healItems.forEach((item) => {
+              item.x -= item.speed;
+            });
+            gameState.healItems = gameState.healItems.filter(
+              (item) => item.x > -item.width - 50
+            );
+            for (let i = gameState.healItems.length - 1; i >= 0; i--) {
+              const item = gameState.healItems[i];
+              if (
+                playerHitbox.x < item.x + item.width &&
+                playerHitbox.x + playerHitbox.width > item.x &&
+                playerHitbox.y < item.y + item.height &&
+                playerHitbox.y + playerHitbox.height > item.y
+              ) {
+                playSfx(sfx.heal);
+                gameState.healItems.splice(i, 1);
+                gameState.player.health = gameState.player.maxHealth;
+                updateHPDisplay();
+                gameState.healSpawnedAtLowHP = false;
+                console.log("Player healed to full");
+              }
+            }
+          }
+        }
+
+        // --- Enhanced Rendering ---
+        function drawBackground() {
+          const { waterJets, healItems, enemyProjectiles } = gameState;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // water jets
+          waterJets.forEach((jet) => {
+            ctx.save();
+            ctx.translate(jet.x + jet.width / 2, jet.y + jet.height / 2);
+            ctx.rotate(jet.angle);
+
+            const gradient = ctx.createLinearGradient(
+              -jet.width / 2,
+              0,
+              jet.width / 2,
+              0
+            );
+            gradient.addColorStop(0, "rgba(135, 206, 250, 0.9)");
+            gradient.addColorStop(0.5, "rgba(32, 178, 170, 0.8)");
+            gradient.addColorStop(1, "rgba(135, 206, 250, 0.9)");
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, jet.width / 2, jet.height / 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+            ctx.beginPath();
+            ctx.ellipse(
+              -jet.width / 4,
+              -jet.height / 4,
+              jet.width / 6,
+              jet.height / 6,
+              0,
+              0,
+              Math.PI * 2
+            );
+            ctx.fill();
+
+            ctx.restore();
+          });
+
+          // enemy projectiles
+          enemyProjectiles.forEach((proj) => {
+            ctx.fillStyle = "rgba(255, 0, 100, 0.8)";
+            ctx.beginPath();
+            ctx.arc(
+              proj.x + proj.width / 2,
+              proj.y + proj.height / 2,
+              proj.width / 2,
+              0,
+              Math.PI * 2
+            );
+            ctx.fill();
+            ctx.strokeStyle = "rgba(255, 150, 200, 1)";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          });
+
+          // heal items (heart)
+          if (healItems && healItems.length) {
+            healItems.forEach((item) => {
+              const centerX = item.x + item.width / 2;
+              const centerY = item.y + item.height / 2;
+              const size = item.width * 0.4;
+
+              ctx.fillStyle = "rgba(255, 20, 147, 0.3)";
+              ctx.beginPath();
+              ctx.arc(centerX, centerY, size * 1.5, 0, Math.PI * 2);
+              ctx.fill();
+
+              ctx.fillStyle = "#FF1493";
+              ctx.beginPath();
+              ctx.arc(
+                centerX - size * 0.4,
+                centerY - size * 0.3,
+                size * 0.6,
+                0,
+                Math.PI * 2
+              );
+              ctx.fill();
+              ctx.beginPath();
+              ctx.arc(
+                centerX + size * 0.4,
+                centerY - size * 0.3,
+                size * 0.6,
+                0,
+                Math.PI * 2
+              );
+              ctx.fill();
+              ctx.beginPath();
+              ctx.moveTo(centerX, centerY + size * 0.8);
+              ctx.lineTo(centerX - size * 0.9, centerY - size * 0.1);
+              ctx.lineTo(centerX + size * 0.9, centerY - size * 0.1);
+              ctx.closePath();
+              ctx.fill();
+
+              ctx.strokeStyle = "#FFF";
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            });
+          }
+        }
+
+        // --- Main Loop & Game State Management ---
+        let rafId = null;
+        function gameLoop() {
+          if (gameState.isGameOver) {
+            drawBackground();
+            return;
+          }
+          updateState();
+          drawBackground();
+          rafId = requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+          gameState.isGameOver = false;
+          gameOverText.style.display = "none";
+          gameState.waterJets = [];
+          gameState.enemies.forEach((enemy) => {
+            try {
+              if (enemy.element && enemy.element.remove) enemy.element.remove();
+            } catch (e) {}
+          });
+          gameState.enemies = [];
+          gameState.enemyProjectiles = [];
+          gameState.healItems = [];
+          gameState.score = 0;
+          scoreText.textContent = `SCORE: ${gameState.score}`;
+          gameState.healSpawnedAtLowHP = false;
+          gameState.isShootingHold = false;
+          const { player, stage } = gameState;
+          player.health = player.maxHealth;
+          updateHPDisplay();
+          player.y = stage.groundY - player.height;
+          player.velocityY = 0;
+          player.isJumping = false;
+          playerElement.style.left = Math.round(player.x) + "px";
+          playerElement.style.top = Math.round(player.y) + "px";
+          if (rafId) cancelAnimationFrame(rafId);
+          rafId = requestAnimationFrame(gameLoop);
+          console.log("Game reset");
+        }
+
+        function initGame() {
+          if (gameInitialized) {
+            resetGame();
+            return;
+          }
+          gameInitialized = true;
+          resize();
+          window.addEventListener("resize", resize);
+          // Gameplay touch listeners on the gameArea only (passive:false so preventDefault works)
+          gameArea.addEventListener("touchstart", handleTouchStart, {
+            passive: false,
+          });
+          gameArea.addEventListener("touchmove", handleTouchMove, {
+            passive: false,
+          });
+          gameArea.addEventListener("touchend", handleTouchEnd, {
+            passive: false,
+          });
+          gameArea.addEventListener("touchcancel", handleTouchEnd, {
+            passive: false,
+          });
+          resetGame();
+          console.log("Game initialized and listeners attached");
+        }
+
+        function startHandler(e) {
+          try {
+            e.preventDefault();
+            titleScreen.style.display = "none";
+            gameArea.style.display = "block";
+            
+            // Initialize audio context
+            initAudio();
+            
+            // Start BGM
+            if (!isBgmPlaying) {
+              bgmEl.play().then(() => {
+                isBgmPlaying = true;
+                console.log("BGM started");
+              }).catch(err => {
+                console.log("BGM failed to start:", err);
+              });
+            }
+            
+            initGame();
+          } catch (err) {
+            console.error("Start handler error:", err);
+          }
+        }
+
+        // Event listeners
+        startButton.addEventListener("click", startHandler);
+        startButton.addEventListener("touchend", startHandler);
+
+        // Initialize on load
+        window.addEventListener("load", () => {
+          resize();
+          updateHPDisplay();
+        });
+      })();
+    </script>
+  </body>
+</html>
+            e.preventDefault();
+          } catch (err) {}
+          // Start BGM playback only on first user interaction per policy
+          if (!isBgmPlaying) {
+            try {
+              bgmEl.load();
+              bgmEl
+                .play()
+                .then(() => {
+                  isBgmPlaying = true;
+                  console.log("BGM started");
+                })
+                .catch((err) => {
+                  console.warn("BGM playback failed:", err);
+                });
+            } catch (err) {
+              console.warn("BGM start error", err);
+            }
+          }
+          titleScreen.style.display = "none";
+          gameArea.style.display = "block";
+          initGame();
+        }
+
+        // Attach start handlers: click, touchstart (non-passive), and pointerdown for reliability
+        startButton.addEventListener("click", startHandler);
+        startButton.addEventListener("touchstart", startHandler, {
+          passive: false,
+        });
+        startButton.addEventListener("pointerdown", startHandler);
+
+        // Prevent accidental page scroll during gameplay gestures by ensuring canvas/gameArea has touch-action none
+        // but do not attach global preventDefault handlers (compliant with rules)
+      })();
+    </script>
+  </body>
+</html>

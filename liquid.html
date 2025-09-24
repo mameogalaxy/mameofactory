@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>ほしフリ</title>
+    <!-- 手書き風のゆるふわフォントを読み込む -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Yusei+Magic&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Matter.jsライブラリを読み込む -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+    <style>
+      /* --- CSS --- */
+      :root {
+        --font-main: "Yusei Magic", sans-serif;
+        --bg-color: #191933; /* 深い藍色 */
+        --text-color: #f0f0ff;
+        --accent-color: #ffddaa; /* 優しい黄色 */
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: var(--font-main);
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      #game-container {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ゲームのメイン描画エリア */
+      #game-screen {
+        flex-grow: 1;
+        position: relative;
+      }
+      /* Matter.jsが生成するcanvasへのスタイル */
+      .render-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      #game-header {
+        display: flex;
+        justify-content: space-between;
+        padding: 15px 20px;
+        font-size: 1.2rem;
+        background: rgba(0, 0, 0, 0.1);
+        position: relative;
+        z-index: 10;
+      }
+
+      .overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--bg-color);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        z-index: 100;
+        transition: opacity 0.5s ease-out;
+        opacity: 0;
+        visibility: hidden;
+      }
+      .overlay.visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .title {
+        font-size: 4rem;
+        color: var(--accent-color);
+        text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+      }
+      .subtitle {
+        font-size: 1rem;
+        margin-top: -10px;
+        margin-bottom: 40px;
+        opacity: 0.8;
+      }
+      .game-over-title {
+        font-size: 3rem;
+        margin-bottom: 20px;
+      }
+      #final-score-display {
+        font-size: 1.5rem;
+        margin-bottom: 40px;
+      }
+
+      button {
+        font-family: var(--font-main);
+        font-size: 1.5rem;
+        padding: 12px 35px;
+        border: 3px solid var(--accent-color);
+        background: transparent;
+        color: var(--accent-color);
+        border-radius: 50px;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 2px 2px 0px 0px var(--accent-color);
+      }
+      button:active {
+        transform: translate(2px, 2px);
+        box-shadow: none;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-container">
+      <header id="game-header" class="hidden">
+        <div id="score-display">スコア: 0</div>
+        <div id="day-display">１日目</div>
+      </header>
+      <main id="game-screen"></main>
+      <div id="start-screen" class="overlay visible">
+        <h1 class="title">ほしフリ</h1>
+        <p class="subtitle">- よるぞらのえほん -</p>
+        <button id="start-button">はじめる</button>
+      </div>
+      <div id="game-over-screen" class="overlay">
+        <h2 class="game-over-title">よあけ</h2>
+        <p id="final-score-display">スコア: 0</p>
+        <button id="restart-button">もういちど</button>
+      </div>
+    </div>
+
+    <script>
+      // --- JavaScript ---
+
+      // --- Matter.js モジュールのエイリアス ---
+      const {
+        Engine,
+        Render,
+        Runner,
+        World,
+        Bodies,
+        Body,
+        Events,
+        Mouse,
+        MouseConstraint,
+      } = Matter;
+
+      // --- DOM要素 ---
+      const startScreen = document.getElementById("start-screen");
+      const gameOverScreen = document.getElementById("game-over-screen");
+      const gameHeader = document.getElementById("game-header");
+      const gameScreen = document.getElementById("game-screen");
+      const startButton = document.getElementById("start-button");
+      const restartButton = document.getElementById("restart-button");
+
+      // --- ゲームの状態と物理エンジン関連 ---
+      let engine;
+      let render;
+      let runner;
+      let mouseConstraint;
+      let slingshotAsteroid; // 発射する小惑星
+      let isSlingshotActive = false;
+
+      // --- サウンド関連 ---
+      let audioContext;
+      let bgmNode;
+      let sfxGainNode;
+
+      // =============================================
+      //  ゲームの初期化と進行
+      // =============================================
+      function startGame() {
+        initAudio();
+        playSFX("start");
+        startScreen.classList.remove("visible");
+        gameHeader.classList.remove("hidden");
+        playBGM();
+        initPhysics(); // 物理エンジンを初期化
+      }
+
+      function restartGame() {
+        playSFX("restart");
+        gameOverScreen.classList.remove("visible");
+        gameHeader.classList.remove("hidden");
+        playBGM();
+        // TODO: ゲーム状態をリセットして再開するロジック
+      }
+
+      // =============================================
+      //  物理エンジン (Matter.js) の設定
+      // =============================================
+      function initPhysics() {
+        // 1. エンジンとレンダラーの作成
+        engine = Engine.create();
+        engine.world.gravity.y = 0; // 宇宙空間なので無重力
+
+        render = Render.create({
+          element: gameScreen,
+          engine: engine,
+          options: {
+            width: gameScreen.clientWidth,
+            height: gameScreen.clientHeight,
+            wireframes: false, // ワイヤーフレームではなく、色付きで表示
+            background: "transparent", // HTMLの背景を活かす
+            pixelRatio: window.devicePixelRatio || 1,
+          },
+        });
+        render.canvas.classList.add("render-canvas");
+
+        // 2. オブジェクト（物体）の作成
+        const earth = Bodies.circle(
+          render.options.width / 2,
+          render.options.height - 80,
+          40,
+          {
+            isStatic: true, // 地球は動かない
+            render: { fillStyle: "#aaddff" }, // 仮の色
+          }
+        );
+
+        slingshotAsteroid = Bodies.circle(
+          render.options.width / 2,
+          render.options.height / 2,
+          20,
+          {
+            restitution: 0.8, // 反発係数
+            friction: 0.05,
+            render: { fillStyle: "#ffddaa" }, // 仮の色
+          }
+        );
+
+        const meteor = Bodies.rectangle(100, 100, 30, 30, {
+          restitution: 0.8,
+          friction: 0.05,
+          render: { fillStyle: "#ffaaaa" }, // 仮の色
+        });
+
+        // 3. 壁の作成
+        const wallOptions = { isStatic: true, render: { visible: false } }; // 壁は見えないように
+        const wallThickness = 50;
+        World.add(engine.world, [
+          // 画面外に出たらオブジェクトを消すための壁
+          Bodies.rectangle(
+            render.options.width / 2,
+            -wallThickness / 2,
+            render.options.width,
+            wallThickness,
+            wallOptions
+          ), // 上
+          Bodies.rectangle(
+            render.options.width / 2,
+            render.options.height + wallThickness / 2,
+            render.options.width,
+            wallThickness,
+            wallOptions
+          ), // 下
+          Bodies.rectangle(
+            -wallThickness / 2,
+            render.options.height / 2,
+            wallThickness,
+            render.options.height,
+            wallOptions
+          ), // 左
+          Bodies.rectangle(
+            render.options.width + wallThickness / 2,
+            render.options.height / 2,
+            wallThickness,
+            render.options.height,
+            wallOptions
+          ), // 右
+        ]);
+
+        // 4. ワールドにオブジェクトを追加
+        World.add(engine.world, [earth, slingshotAsteroid, meteor]);
+
+        // 5. マウス操作の設定
+        const mouse = Mouse.create(render.canvas);
+        mouseConstraint = MouseConstraint.create(engine, {
+          mouse: mouse,
+          constraint: {
+            stiffness: 0.2,
+            render: { visible: false }, // 操作中の線は非表示
+          },
+        });
+        World.add(engine.world, mouseConstraint);
+
+        // 6. イベントリスナーの設定
+        Events.on(mouseConstraint, "startdrag", (event) => {
+          if (event.body === slingshotAsteroid) {
+            isSlingshotActive = true;
+          }
+        });
+        Events.on(mouseConstraint, "enddrag", (event) => {
+          if (isSlingshotActive) {
+            isSlingshotActive = false;
+            // TODO: 発射の効果音を鳴らす
+          }
+        });
+
+        // 7. エンジンとレンダラーの実行
+        Runner.run(engine);
+        Render.run(render);
+      }
+
+      // =============================================
+      //  サウンド生成 (Web Audio API)
+      // =============================================
+      function initAudio() {
+        /* (変更なし) */ if (audioContext) return;
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        sfxGainNode = audioContext.createGain();
+        sfxGainNode.gain.value = 0.3;
+        sfxGainNode.connect(audioContext.destination);
+      }
+      function playBGM() {
+        /* (変更なし) */ if (!audioContext || bgmNode) return;
+        const bpm = 100;
+        const noteDuration = 60 / bpm / 2;
+        const sequence = [
+          { note: 72, time: 0 },
+          { note: 76, time: 1 },
+          { note: 79, time: 2 },
+          { note: 83, time: 3 },
+          { note: 79, time: 4 },
+          { note: 83, time: 5 },
+          { note: 86, time: 6 },
+          { note: 83, time: 7 },
+          { note: 81, time: 8 },
+          { note: 84, time: 9 },
+          { note: 88, time: 10 },
+          { note: 84, time: 11 },
+          { note: 77, time: 12 },
+          { note: 81, time: 13 },
+          { note: 84, time: 14 },
+          { note: 81, time: 15 },
+        ];
+        let sequenceIndex = 0;
+        const bgmGain = audioContext.createGain();
+        bgmGain.gain.value = 0.15;
+        bgmGain.connect(audioContext.destination);
+        const createNote = (midiNote) => {
+          const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
+          const osc = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          osc.type = "sine";
+          osc.frequency.value = freq;
+          const osc2 = audioContext.createOscillator();
+          osc2.type = "triangle";
+          osc2.frequency.value = freq * 2;
+          gain.gain.setValueAtTime(0, audioContext.currentTime);
+          gain.gain.linearRampToValueAtTime(1, audioContext.currentTime + 0.01);
+          gain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            audioContext.currentTime + 1.5
+          );
+          osc.connect(gain);
+          osc2.connect(gain);
+          gain.connect(bgmGain);
+          osc.start(audioContext.currentTime);
+          osc2.start(audioContext.currentTime);
+          osc.stop(audioContext.currentTime + 1.5);
+          osc2.stop(audioContext.currentTime + 1.5);
+        };
+        const scheduler = () => {
+          createNote(sequence[sequenceIndex].note);
+          sequenceIndex = (sequenceIndex + 1) % sequence.length;
+          bgmNode = setTimeout(scheduler, noteDuration * 1000);
+        };
+        scheduler();
+      }
+      function stopBGM() {
+        /* (変更なし) */ if (bgmNode) {
+          clearTimeout(bgmNode);
+          bgmNode = null;
+        }
+      }
+      function playSFX(type) {
+        /* (変更なし) */ if (!audioContext) return;
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(sfxGainNode);
+        const now = audioContext.currentTime;
+        switch (type) {
+          case "start":
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(523, now);
+            osc.frequency.exponentialRampToValueAtTime(1046, now + 0.3);
+            gain.gain.setValueAtTime(0.5, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+            break;
+          case "restart":
+            osc.type = "square";
+            osc.frequency.setValueAtTime(261, now);
+            osc.frequency.linearRampToValueAtTime(392, now + 0.1);
+            gain.gain.setValueAtTime(0.5, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+            break;
+        }
+        osc.start(now);
+        osc.stop(now + 0.5);
+      }
+
+      // =============================================
+      //  イベントリスナー
+      // =============================================
+      startButton.addEventListener("click", startGame);
+      restartButton.addEventListener("click", restartGame);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ほしフリ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Yusei+Magic&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+    <style>
+        :root {
+            --font-main: 'Yusei Magic', sans-serif;
+            --text-color: #f0f0ff;
+            --accent-color: #ffee77;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: var(--font-main);
+            background: linear-gradient(180deg, #0a0a1a 0%, #1a1a3a 30%, #2a1a4a 70%, #3a2a5a 100%);
+            color: var(--text-color);
+            user-select: none;
+        }
+
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 3s infinite ease-in-out;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        #game-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            z-index: 2;
+        }
+        
+        #game-screen {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        .render-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            font-size: 1.2rem;
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid rgba(255, 238, 119, 0.3);
+            z-index: 10;
+        }
+
+        #health-bar {
+            width: 150px;
+            height: 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid var(--accent-color);
+        }
+
+        #health-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcf7f);
+            transition: width 0.5s ease;
+            border-radius: 8px;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 26, 0.95);
+            backdrop-filter: blur(5px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 100;
+            transition: all 0.5s ease-out;
+            opacity: 0;
+            visibility: hidden;
+        }
+        .overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .title { 
+            font-size: 4rem; 
+            color: var(--accent-color); 
+            text-shadow: 0 0 20px rgba(255, 238, 119, 0.5);
+            margin-bottom: 10px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 20px rgba(255, 238, 119, 0.5); }
+            to { text-shadow: 0 0 30px rgba(255, 238, 119, 0.8); }
+        }
+
+        .subtitle { 
+            font-size: 1.2rem; 
+            margin-bottom: 40px; 
+            opacity: 0.9; 
+        }
+        .game-over-title { 
+            font-size: 3rem; 
+            margin-bottom: 20px; 
+            color: #ffa500;
+        }
+        #final-score-display { 
+            font-size: 1.8rem; 
+            margin-bottom: 40px; 
+            color: var(--accent-color);
+        }
+
+        button {
+            font-family: var(--font-main);
+            font-size: 1.5rem;
+            padding: 15px 40px;
+            border: 3px solid var(--accent-color);
+            background: rgba(255, 238, 119, 0.1);
+            color: var(--accent-color);
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 0 20px rgba(255, 238, 119, 0.3);
+        }
+
+        button:hover {
+            background: rgba(255, 238, 119, 0.2);
+            box-shadow: 0 0 30px rgba(255, 238, 119, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .hidden { display: none !important; }
+
+        .instructions {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            font-size: 1rem;
+            opacity: 0.8;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div class="stars" id="stars"></div>
+
+    <div id="game-container">
+        <header id="game-header" class="hidden">
+            <div id="score-display">スコア: 0</div>
+            <div id="health-container">
+                <div>地球のけんこう</div>
+                <div id="health-bar">
+                    <div id="health-fill" style="width: 100%"></div>
+                </div>
+            </div>
+            <div id="day-display">1日目</div>
+        </header>
+        
+        <main id="game-screen">
+            <div class="instructions hidden" id="instructions">
+                小惑星をドラッグして隕石を撃ち落とそう！<br>
+                地球を守って高スコアを目指そう！
+            </div>
+        </main>
+        
+        <div id="start-screen" class="overlay visible">
+            <h1 class="title">ほしフリ</h1>
+            <p class="subtitle">- よるぞらのえほん -</p>
+            <p style="margin-bottom: 30px; opacity: 0.7; max-width: 300px;">
+                小惑星を流れ星にして、地球に向かう隕石を撃ち落とそう！<br>
+                美しい夜空で繰り広げられる宇宙の物語
+            </p>
+            <button id="start-button">はじめる</button>
+        </div>
+        
+        <div id="game-over-screen" class="overlay">
+            <h2 class="game-over-title">よあけ</h2>
+            <p id="final-score-display">スコア: 0</p>
+            <p style="margin-bottom: 30px; opacity: 0.8;">
+                新しい一日が始まります...<br>
+                また夜になったら遊びに来てね
+            </p>
+            <button id="restart-button">もういちど</button>
+        </div>
+    </div>
+
+    <script>
+        const { Engine, Render, Runner, World, Bodies, Body, Events, Mouse, MouseConstraint, Vector } = Matter;
+
+        // ゲーム状態
+        let engine, render, runner, mouseConstraint;
+        let asteroids = [], meteors = [], earth, moon;
+        let isGameRunning = false;
+        let score = 0, day = 1, earthHealth = 100;
+        let lastMeteorSpawn = 0, meteorSpawnRate = 1000;
+        let audioContext, bgmNode, sfxGainNode;
+
+        // DOM要素
+        const elements = {};
+
+        function initElements() {
+            const ids = ['start-screen', 'game-over-screen', 'game-header', 'game-screen', 
+                        'start-button', 'restart-button', 'score-display', 'day-display',
+                        'health-fill', 'instructions'];
+            
+            ids.forEach(id => {
+                elements[id] = document.getElementById(id);
+            });
+        }
+
+        function createBackgroundStars() {
+            const starsContainer = document.getElementById('stars');
+            for (let i = 0; i < 100; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.width = star.style.height = (Math.random() * 3 + 1) + 'px';
+                star.style.animationDelay = Math.random() * 3 + 's';
+                star.style.animationDuration = (Math.random() * 2 + 2) + 's';
+                starsContainer.appendChild(star);
+            }
+        }
+
+        function setupEventListeners() {
+            elements['start-button'].addEventListener('click', startGame);
+            elements['restart-button'].addEventListener('click', restartGame);
+        }
+
+        function startGame() {
+            elements['start-screen'].classList.remove('visible');
+            elements['game-header'].classList.remove('hidden');
+            elements['instructions'].classList.remove('hidden');
+            
+            isGameRunning = true;
+            score = 0; day = 1; earthHealth = 100;
+            asteroids = []; meteors = [];
+            lastMeteorSpawn = Date.now();
+            meteorSpawnRate = 1000;
+            
+            // テスト用：ゲーム開始後すぐに隕石をスポーン
+            setTimeout(() => {
+                if (isGameRunning) {
+                    console.log('First meteor spawn!');
+                    spawnMeteor();
+                }
+            }, 1000);
+            updateUI();
+            
+            initAudio();
+            playBGM();
+            initPhysics();
+            startGameLoop();
+        }
+
+        function endGame() {
+            isGameRunning = false;
+            stopBGM();
+            elements['game-header'].classList.add('hidden');
+            elements['instructions'].classList.add('hidden');
+            
+            document.getElementById('final-score-display').textContent = `スコア: ${score}`;
+            elements['game-over-screen'].classList.add('visible');
+            
+            if (engine) {
+                World.clear(engine.world);
+                Engine.clear(engine);
+            }
+        }
+
+        function restartGame() {
+            elements['game-over-screen'].classList.remove('visible');
+            startGame();
+        }
+
+        function initPhysics() {
+            engine = Engine.create();
+            engine.world.gravity.y = 1;
+
+            render = Render.create({
+                element: elements['game-screen'],
+                engine: engine,
+                options: {
+                    width: elements['game-screen'].clientWidth,
+                    height: elements['game-screen'].clientHeight,
+                    wireframes: false,
+                    background: 'transparent',
+                    pixelRatio: window.devicePixelRatio || 1,
+                    showDebug: false,
+                    showVelocity: false,
+                }
+            });
+
+            render.canvas.classList.add('render-canvas');
+
+            // 地球
+            earth = Bodies.circle(render.options.width / 2, render.options.height - 60, 50, {
+                isStatic: true,
+                render: { 
+                    fillStyle: '#4a90e2',
+                    strokeStyle: '#2a70c2',
+                    lineWidth: 3
+                },
+                label: 'earth'
+            });
+            
+            // 月
+            moon = Bodies.circle(render.options.width / 2 + 120, render.options.height - 80, 20, {
+                isStatic: true,
+                render: { 
+                    fillStyle: '#e8e8e8',
+                    strokeStyle: '#d0d0d0',
+                    lineWidth: 2
+                },
+                label: 'moon'
+            });
+
+            // 境界壁
+            const walls = [
+                Bodies.rectangle(render.options.width / 2, -25, render.options.width, 50, { isStatic: true, render: { visible: false } }),
+                Bodies.rectangle(render.options.width / 2, render.options.height + 25, render.options.width, 50, { isStatic: true, render: { visible: false } }),
+                Bodies.rectangle(-25, render.options.height / 2, 50, render.options.height, { isStatic: true, render: { visible: false } }),
+                Bodies.rectangle(render.options.width + 25, render.options.height / 2, 50, render.options.height, { isStatic: true, render: { visible: false } })
+            ];
+
+            World.add(engine.world, [earth, moon, ...walls]);
+
+            // マウス制御
+            const mouse = Mouse.create(render.canvas);
+            mouseConstraint = MouseConstraint.create(engine, {
+                mouse: mouse,
+                constraint: {
+                    stiffness: 0.2,
+                    render: { visible: false }
+                }
+            });
+            World.add(engine.world, mouseConstraint);
+
+            Events.on(mouseConstraint, 'enddrag', handleDragEnd);
+            Events.on(engine, 'collisionStart', handleCollisions);
+
+            runner = Runner.create();
+            Runner.run(runner, engine);
+            Render.run(render);
+
+            // 初期小惑星
+            spawnAsteroid();
+        }
+
+        function spawnAsteroid() {
+            const x = Math.random() * (render.options.width - 200) + 100;
+            const y = render.options.height - 200;
+            
+            const asteroid = Bodies.circle(x, y, 15, {
+                restitution: 0.8,
+                friction: 0.1,
+                frictionAir: 0.01,
+                render: { 
+                    fillStyle: '#ffee77',
+                    strokeStyle: '#ffdd44',
+                    lineWidth: 2
+                },
+                label: 'asteroid'
+            });
+            
+            asteroids.push(asteroid);
+            World.add(engine.world, asteroid);
+        }
+
+        function spawnMeteor() {
+            const x = Math.random() * render.options.width;
+            
+            const meteor = Bodies.circle(x, -50, 15, {
+                render: { 
+                    fillStyle: '#ff4444',
+                    strokeStyle: '#cc2222',
+                    lineWidth: 3
+                },
+                label: 'meteor'
+            });
+            
+            // シンプルな落下（重力に任せる）
+            Body.setVelocity(meteor, { x: 0, y: 2 });
+            
+            meteors.push(meteor);
+            World.add(engine.world, meteor);
+            
+            console.log(`Meteor spawned at x:${x.toFixed(1)}, total meteors: ${meteors.length}`);
+        }
+
+        function handleDragEnd(event) {
+            if (event.body && event.body.label === 'asteroid') {
+                const direction = Vector.normalise(Vector.sub(mouseConstraint.mouse.position, event.body.position));
+                Body.applyForce(event.body, event.body.position, Vector.mult(direction, 0.02));
+                playSFX('launch');
+                
+                // リスポーン
+                setTimeout(() => {
+                    if (isGameRunning) spawnAsteroid();
+                }, 2000);
+            }
+        }
+
+        function handleCollisions(event) {
+            for (let pair of event.pairs) {
+                const { bodyA, bodyB } = pair;
+                
+                // 隕石と地球/月の衝突
+                if ((bodyA.label === 'meteor' && (bodyB.label === 'earth' || bodyB.label === 'moon')) ||
+                    (bodyB.label === 'meteor' && (bodyA.label === 'earth' || bodyA.label === 'moon'))) {
+                    const meteor = bodyA.label === 'meteor' ? bodyA : bodyB;
+                    const target = bodyA.label === 'meteor' ? bodyB : bodyA;
+                    
+                    if (target.label === 'moon') {
+                        earthHealth -= 10;
+                        score += 25;
+                    } else {
+                        earthHealth -= 25;
+                        score = Math.max(0, score - 25);
+                    }
+                    
+                    removeMeteor(meteor);
+                    playSFX('hit');
+                    updateUI();
+                    
+                    if (earthHealth <= 0) {
+                        endGame();
+                    }
+                }
+                
+                // 小惑星と隕石の衝突
+                if ((bodyA.label === 'asteroid' && bodyB.label === 'meteor') ||
+                    (bodyA.label === 'meteor' && bodyB.label === 'asteroid')) {
+                    const meteor = bodyA.label === 'meteor' ? bodyA : bodyB;
+                    
+                    score += 100;
+                    removeMeteor(meteor);
+                    playSFX('destroy');
+                    updateUI();
+                }
+            }
+        }
+
+        function removeMeteor(meteor) {
+            World.remove(engine.world, meteor);
+            meteors = meteors.filter(m => m !== meteor);
+        }
+
+        function startGameLoop() {
+            const gameLoop = () => {
+                if (!isGameRunning) return;
+                updateGame();
+                requestAnimationFrame(gameLoop);
+            };
+            gameLoop();
+        }
+
+        function updateGame() {
+            const now = Date.now();
+            
+            // 隕石スポーン
+            if (now - lastMeteorSpawn > meteorSpawnRate) {
+                spawnMeteor();
+                lastMeteorSpawn = now;
+                console.log(`Next meteor in ${meteorSpawnRate}ms`);
+            }
+            
+            // 画面外の隕石を削除
+            meteors = meteors.filter(meteor => {
+                if (meteor.position.y > render.options.height + 100) {
+                    World.remove(engine.world, meteor);
+                    return false;
+                }
+                return true;
+            });
+            
+            // 小惑星のリスポーン
+            asteroids.forEach(asteroid => {
+                if (asteroid.position.y > render.options.height + 100 ||
+                    asteroid.position.y < -100 ||
+                    asteroid.position.x < -100 ||
+                    asteroid.position.x > render.options.width + 100) {
+                    const newX = Math.random() * (render.options.width - 200) + 100;
+                    const newY = render.options.height - 200;
+                    Body.setPosition(asteroid, { x: newX, y: newY });
+                    Body.setVelocity(asteroid, { x: 0, y: 0 });
+                    Body.setAngularVelocity(asteroid, 0);
+                }
+            });
+            
+            // 日数更新
+            const newDay = Math.floor(score / 500) + 1;
+            if (newDay !== day) {
+                day = newDay;
+                updateUI();
+            }
+        }
+
+        function updateUI() {
+            elements['score-display'].textContent = `スコア: ${score}`;
+            elements['day-display'].textContent = `${day}日目`;
+            elements['health-fill'].style.width = Math.max(earthHealth, 0) + '%';
+        }
+
+        function initAudio() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                sfxGainNode = audioContext.createGain();
+                sfxGainNode.gain.value = 0.3;
+                sfxGainNode.connect(audioContext.destination);
+            } catch (error) {
+                console.log('Audio initialization failed:', error);
+            }
+        }
+
+        function playSFX(type) {
+            if (!audioContext) return;
+            
+            try {
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                osc.connect(gain);
+                gain.connect(sfxGainNode);
+                
+                const now = audioContext.currentTime;
+                
+                switch (type) {
+                    case 'launch':
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(200, now);
+                        osc.frequency.exponentialRampToValueAtTime(800, now + 0.2);
+                        gain.gain.setValueAtTime(0.4, now);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                        break;
+                        
+                    case 'destroy':
+                        osc.type = 'square';
+                        osc.frequency.setValueAtTime(800, now);
+                        osc.frequency.exponentialRampToValueAtTime(200, now + 0.15);
+                        gain.gain.setValueAtTime(0.3, now);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                        break;
+                        
+                    case 'hit':
+                        osc.type = 'square';
+                        osc.frequency.setValueAtTime(150, now);
+                        osc.frequency.linearRampToValueAtTime(80, now + 0.3);
+                        gain.gain.setValueAtTime(0.6, now);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+                        break;
+                }
+                
+                osc.start(now);
+                osc.stop(now + 0.5);
+            } catch (error) {
+                console.log('SFX playback failed:', error);
+            }
+        }
+
+        function playBGM() {
+            if (!audioContext || bgmNode) return;
+            
+            const bpm = 70;
+            const noteDuration = 60 / bpm / 2;
+            
+            const sequence = [
+                { note: 60 }, { note: 62 }, { note: 65 }, { note: 67 },
+                { note: 69 }, { note: 72 }, { note: 69 }, { note: 67 },
+                { note: 65 }, { note: 67 }, { note: 69 }, { note: 65 },
+                { note: 62 }, { note: 60 }, { note: 65 }, { note: 60 }
+            ];
+            
+            let sequenceIndex = 0;
+            
+            const bgmGain = audioContext.createGain();
+            bgmGain.gain.value = 0.06;
+            bgmGain.connect(audioContext.destination);
+
+            const createNote = (midiNote) => {
+                const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                
+                const now = audioContext.currentTime;
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.4, now + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
+                
+                osc.connect(gain);
+                gain.connect(bgmGain);
+                
+                osc.start(now);
+                osc.stop(now + 2.5);
+            };
+
+            const scheduler = () => {
+                createNote(sequence[sequenceIndex].note);
+                sequenceIndex = (sequenceIndex + 1) % sequence.length;
+                bgmNode = setTimeout(scheduler, noteDuration * 1000);
+            };
+            
+            scheduler();
+        }
+
+        function stopBGM() {
+            if (bgmNode) {
+                clearTimeout(bgmNode);
+                bgmNode = null;
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            if (render) {
+                render.canvas.width = elements['game-screen'].clientWidth;
+                render.canvas.height = elements['game-screen'].clientHeight;
+                render.options.width = elements['game-screen'].clientWidth;
+                render.options.height = elements['game-screen'].clientHeight;
+            }
+        });
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            initElements();
+            createBackgroundStars();
+            setupEventListeners();
+        });
+    </script>
+</body>
+</html>

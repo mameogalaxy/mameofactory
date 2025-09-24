@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ジャンプラッシュ</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh; overflow: hidden;
+            display: flex; flex-direction: column; justify-content: center;
+            align-items: center; padding: 10px;
+        }
+        h1 {
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.3);
+            font-size: clamp(2rem, 7vw, 3.2rem);
+            margin-bottom: 15px;
+            background: linear-gradient(45deg, #ffeb3b, #ff9800, #f44336);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 900;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            aspect-ratio: 2/1;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+        }
+        
+        @media (max-width: 768px) {
+            #gameContainer {
+                max-width: 95vw;
+                height: 47.5vw;
+                min-height: 300px;
+            }
+        }
+        canvas { 
+            width: 100%; height: 100%;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98FB98 70%, #90EE90 100%);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        #ui {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.2), transparent);
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .stat {
+            background: linear-gradient(145deg, rgba(255,255,255,0.3), rgba(255,255,255,0.2));
+            backdrop-filter: blur(15px);
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: clamp(0.9rem, 3.5vw, 1.2rem);
+            margin: 3px;
+            border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.4);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        .stat.stock {
+            background: linear-gradient(145deg, rgba(255,235,59,0.4), rgba(255,193,7,0.3));
+            border: 1px solid rgba(255,235,59,0.5);
+            color: #FFF59D;
+        }
+        .stat.level {
+            background: linear-gradient(145deg, rgba(255,87,34,0.4), rgba(244,67,54,0.3));
+            border: 1px solid rgba(255,87,34,0.5);
+            color: #FFAB91;
+        }
+        .btn {
+            background: linear-gradient(145deg, rgba(76,175,80,0.3), rgba(56,142,60,0.2));
+            border: 2px solid rgba(76,175,80,0.4);
+            color: #E8F5E8;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: clamp(0.8rem, 3vw, 1rem);
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        .btn:hover {
+            background: linear-gradient(145deg, rgba(76,175,80,0.4), rgba(56,142,60,0.3));
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .btn:active {
+            transform: translateY(0);
+            background: linear-gradient(145deg, rgba(76,175,80,0.5), rgba(56,142,60,0.4));
+        }
+        #controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        #instructions {
+            margin-top: 15px;
+            font-size: clamp(0.8rem, 2.5vw, 1rem);
+            text-align: center;
+            background: rgba(255,255,255,0.15);
+            padding: 12px 24px;
+            border-radius: 20px;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(145deg, rgba(0,0,0,0.9), rgba(0,0,0,0.7));
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(255,255,255,0.2);
+            display: none;
+        }
+        #gameOver h2 {
+            font-size: clamp(1.2rem, 4vw, 2rem);
+            margin-bottom: 15px;
+            color: #ff6b6b;
+        }
+        #gameOver p {
+            font-size: clamp(0.9rem, 3vw, 1.2rem);
+            margin-bottom: 20px;
+        }
+        @media (max-width: 768px) {
+            body { padding: 3px; }
+            h1 { margin-bottom: 8px; }
+            #ui { 
+                padding: 6px;
+                flex-wrap: nowrap;
+                gap: 4px;
+            }
+            .stat { 
+                padding: 6px 8px;
+                font-size: clamp(0.7rem, 2.8vw, 0.9rem);
+                margin: 1px;
+                white-space: nowrap;
+            }
+            .btn {
+                padding: 6px 10px;
+                font-size: clamp(0.7rem, 2.8vw, 0.9rem);
+                min-width: auto;
+            }
+            #instructions {
+                font-size: clamp(0.8rem, 2.5vw, 1rem);
+                padding: 8px 12px;
+                margin-top: 6px;
+            }
+            #gameOver {
+                padding: 20px;
+            }
+            #gameOver h2 {
+                font-size: clamp(1.2rem, 4.5vw, 2rem);
+            }
+            #gameOver p {
+                font-size: clamp(0.9rem, 3vw, 1.2rem);
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>ジャンプラッシュ</h1>
+    <div id="gameContainer">
+        <canvas id="game" width="800" height="400"></canvas>
+        <div id="ui">
+            <div class="stat">距離: <span id="distance">0</span>m</div>
+            <div class="stat level">Lv.<span id="difficulty">1</span></div>
+            <div class="stat stock">ストック: <span id="stock">0</span></div>
+            <button onclick="toggleBGM()" class="btn">BGM</button>
+        </div>
+        <div id="gameOver">
+            <h2>ゲームオーバー</h2>
+            <p>距離: <span id="finalDistance">0</span>m</p>
+            <p>難易度: <span id="finalDifficulty">1</span></p>
+            <button onclick="restartGame()" class="btn">リトライ</button>
+        </div>
+    </div>
+    <div id="instructions">
+        タップでジャンプ | スペースキー | 2段ジャンプ可能 | 金色アイテムで3段ジャンプ
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        
+        let distance = 0;
+        let gameSpeed = 4;
+        let scrollOffset = 0;
+        let difficulty = 1;
+        let lastObstacleX = 0;
+        let deathTimer = 0;
+        let gameTime = 0;
+        
+        // プレイヤー（自転車）
+        const player = { 
+            x: 150, y: 300, width: 50, height: 40, 
+            vy: 0, jumpPower: 15, onGround: true,
+            canDoubleJump: false, canTripleJump: false, wheelRotation: 0,
+            isDead: false, deathVx: 0, deathVy: 0, rotation: 0,
+            tripleJumpStock: 0, invincible: false, invincibleTimer: 0
+        };
+        
+        // BGM管理
+        let bgmPlaying = false;
+        let bgmEnabled = false; // BGMが有効かどうか
+        let audioContext = null;
+        let bgmGain = null;
+        
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                bgmGain = audioContext.createGain();
+                bgmGain.connect(audioContext.destination);
+                bgmGain.gain.value = 0.3;
+            }
+        }
+        
+        // 効果音再生
+        function playSound(frequency, duration, type = 'sine', volume = 0.3) {
+            if (!audioContext) initAudio();
+            
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            
+            osc.type = type;
+            osc.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            
+            gain.gain.setValueAtTime(volume, audioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            osc.start(audioContext.currentTime);
+            osc.stop(audioContext.currentTime + duration);
+        }
+        
+        // ジャンプ音（かわいい音）
+        function playJumpSound() {
+            playSound(600, 0.15, 'sine', 0.15);
+            setTimeout(() => playSound(800, 0.1, 'sine', 0.1), 50);
+        }
+        
+        // 吹っ飛び音
+        function playHitSound() {
+            // 衝撃音
+            playSound(150, 0.3, 'sawtooth', 0.4);
+            // 爆発音
+            setTimeout(() => playSound(80, 0.5, 'square', 0.3), 100);
+        }
+        
+        // ボタン音
+        function playButtonSound() {
+            playSound(600, 0.1, 'sine', 0.2);
+            setTimeout(() => playSound(800, 0.1, 'sine', 0.15), 50);
+        }
+        
+        function playBGM() {
+            if (!audioContext) initAudio();
+            if (bgmPlaying) return;
+            
+            bgmPlaying = true;
+            const playTone = (freq, duration, delay = 0) => {
+                setTimeout(() => {
+                    const osc = audioContext.createOscillator();
+                    const gain = audioContext.createGain();
+                    osc.connect(gain);
+                    gain.connect(bgmGain);
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                    osc.start();
+                    osc.stop(audioContext.currentTime + duration);
+                }, delay);
+            };
+            
+            const bgmLoop = () => {
+                if (!bgmPlaying) return;
+                // 簡単なBGMメロディ
+                [262, 294, 330, 349, 392, 440, 494, 523].forEach((freq, i) => {
+                    playTone(freq, 0.3, i * 400);
+                });
+                setTimeout(bgmLoop, 3200);
+            };
+            bgmLoop();
+        }
+        
+        let bgmStopping = false;
+        
+        function stopBGM() {
+            bgmPlaying = false;
+            bgmStopping = true;
+            // 音声コンテキストをリセットして即座停止
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close().then(() => {
+                    audioContext = null;
+                    bgmGain = null;
+                    bgmStopping = false;
+                });
+            } else {
+                bgmStopping = false;
+            }
+        }
+        
+        function toggleBGM() {
+            playButtonSound();
+            if (bgmPlaying) {
+                stopBGM();
+                bgmEnabled = false;
+            } else {
+                bgmEnabled = true;
+                playBGM();
+            }
+        }
+        
+        // 障害物
+        const obstacles = [];
+        
+        // 穴
+        const holes = [];
+        
+        // アイテム
+        const items = [];
+        
+        // 飛んでくる緑玉
+        const greenBalls = [];
+        
+        // モグラ
+        const moles = [];
+        
+        // 天気システム
+        let weather = 'sunny';
+        let weatherTimer = 0;
+        let weatherDuration = 1800;
+        
+        // 背景要素
+        const clouds = [];
+        const trees = [];
+        
+        // 重力
+        const gravity = 0.8;
+        const groundY = 350;
+        
+        // キー入力
+        const keys = {};
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Space') {
+                e.preventDefault();
+                // ゲームオーバー画面が表示されている場合はリトライ
+                if (document.getElementById('gameOver').style.display === 'block') {
+                    restartGame();
+                } else {
+                    jump();
+                }
+            }
+        });
+        
+        // ジャンプ関数
+        function jump() {
+            if (player.onGround) {
+                player.vy = -player.jumpPower;
+                player.onGround = false;
+                player.canDoubleJump = true;
+                playJumpSound();
+            } else if (player.canDoubleJump) {
+                player.vy = -player.jumpPower * 0.8;
+                player.canDoubleJump = false;
+                playJumpSound();
+            } else if (player.canTripleJump) {
+                player.vy = -player.jumpPower * 0.7;
+                player.canTripleJump = false;
+                playJumpSound();
+            } else if (player.tripleJumpStock > 0) {
+                player.vy = -player.jumpPower * 0.7;
+                player.tripleJumpStock--;
+                document.getElementById('stock').textContent = player.tripleJumpStock;
+                playJumpSound();
+            }
+        }
+        
+        // 直感的タッチ操作
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            jump();
+        });
+        
+        canvas.addEventListener('click', (e) => {
+            e.preventDefault();
+            jump();
+        });
+        
+        // リスタート関数
+        function restartGame() {
+            // BGM停止中はリトライできない
+            if (bgmStopping) {
+                setTimeout(restartGame, 100);
+                return;
+            }
+            
+            playButtonSound();
+            // リトライ効果音
+            setTimeout(() => playSound(400, 0.2, 'sine', 0.2), 100);
+            setTimeout(() => playSound(500, 0.2, 'sine', 0.2), 200);
+            setTimeout(() => playSound(600, 0.3, 'sine', 0.25), 300);
+            
+            // BGMが有効なら再開
+            if (bgmEnabled && !bgmPlaying) {
+                setTimeout(() => playBGM(), 500);
+            }
+            
+            document.getElementById('gameOver').style.display = 'none';
+            resetGame();
+        }
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        // 障害物生成（バランス調整）
+        function spawnObstacle() {
+            const currentX = canvas.width + scrollOffset;
+            
+            // 最低距離を確保（難易度が上がっても適度な間隔を保つ）
+            const minDistance = Math.max(120, 180 - difficulty * 8);
+            if (currentX - lastObstacleX < minDistance) return;
+            
+            const types = ['rock', 'fence', 'high_fence'];
+            let obstacleCount = 1;
+            
+            // 連続障害物の出現率を緊急度に応じて調整
+            if (difficulty > 4 && Math.random() < 0.25) obstacleCount = 2;
+            if (difficulty > 8 && Math.random() < 0.15) obstacleCount = 3;
+            
+            for (let i = 0; i < obstacleCount; i++) {
+                const type = types[Math.floor(Math.random() * Math.min(types.length, 1 + Math.floor(difficulty / 3)))];
+                const height = type === 'high_fence' ? 60 : 30;
+                
+                obstacles.push({
+                    x: currentX + i * 90, // 間隔を少し広げる
+                    y: groundY - height,
+                    width: 30,
+                    height: height,
+                    type: type,
+                    color: type === 'rock' ? '#666' : type === 'high_fence' ? '#654321' : '#8B4513'
+                });
+            }
+            
+            lastObstacleX = currentX;
+        }
+        
+        // 穴生成
+        function spawnHole() {
+            holes.push({
+                x: canvas.width + scrollOffset,
+                width: 80 + Math.random() * 40,
+                depth: 30 + Math.random() * 20
+            });
+        }
+        
+        // アイテム生成
+        function spawnItem() {
+            const isInvincible = Math.random() < 0.1;
+            items.push({
+                x: canvas.width + scrollOffset,
+                y: groundY - 80 - Math.random() * 50,
+                width: 25,
+                height: 25,
+                bounce: 0,
+                type: isInvincible ? 'invincible' : 'jump'
+            });
+        }
+        
+        // モグラ生成
+        function spawnMole(holeX, holeWidth) {
+            moles.push({
+                x: holeX + holeWidth/2 - 15,
+                y: groundY,
+                width: 30,
+                height: 30,
+                vy: -8,
+                bounced: false
+            });
+        }
+        
+        // 緑玉生成（レベル10以上）
+        function spawnGreenBall() {
+            greenBalls.push({
+                x: canvas.width + scrollOffset,
+                y: groundY - 150 - Math.random() * 100,
+                width: 20,
+                height: 20,
+                speed: gameSpeed + 2 + Math.random() * 3,
+                bounce: Math.random() * Math.PI * 2
+            });
+        }
+        
+        // 背景要素生成（プロ仕様）
+        function spawnBackground() {
+            // 雲（天気によって頻度調整）
+            const cloudRate = weather === 'cloudy' ? 0.02 : weather === 'rainy' ? 0.015 : 0.008;
+            if (Math.random() < cloudRate) {
+                clouds.push({
+                    x: canvas.width + scrollOffset + 50,
+                    y: 30 + Math.random() * 120,
+                    size: 25 + Math.random() * 30
+                });
+            }
+            
+            // 木（バリエーション追加）
+            if (Math.random() < 0.015) {
+                const treeHeight = 60 + Math.random() * 40;
+                trees.push({
+                    x: canvas.width + scrollOffset,
+                    y: groundY - treeHeight,
+                    width: 15 + Math.random() * 10,
+                    height: treeHeight
+                });
+            }
+        }
+        
+        // 衝突判定
+        function collision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+        
+        // 更新
+        function update() {
+            if (player.isDead) {
+                // 死亡アニメーション
+                player.x += player.deathVx;
+                player.y += player.deathVy;
+                player.deathVy += 0.5; // 重力
+                player.rotation += 0.2;
+                
+                deathTimer++;
+                if (deathTimer > 120) { // 2秒後にゲームオーバー画面
+                    gameOver();
+                }
+                return;
+            }
+            
+            // 難易度調整（距離に応じて上昇）
+            difficulty = Math.floor(distance / 200) + 1;
+            gameSpeed = 4 + difficulty * 0.3;
+            
+            // スクロール
+            scrollOffset += gameSpeed;
+            distance = Math.floor(scrollOffset / 10);
+            
+            // プレイヤー物理
+            player.vy += gravity;
+            player.y += player.vy;
+            
+            // 地面判定
+            if (player.y + player.height >= groundY) {
+                player.y = groundY - player.height;
+                player.vy = 0;
+                player.onGround = true;
+                player.canDoubleJump = false;
+            }
+            
+            // 車輪回転
+            player.wheelRotation += gameSpeed * 0.2;
+            
+            // ゲーム時間更新
+            gameTime++;
+            
+            // 障害物更新
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obstacle = obstacles[i];
+                obstacle.x -= gameSpeed;
+                
+                // 画面外削除
+                if (obstacle.x + obstacle.width < 0) {
+                    obstacles.splice(i, 1);
+                    continue;
+                }
+                
+                // 衝突判定（より精密に）
+                if (!player.invincible &&
+                    player.x + 5 < obstacle.x + obstacle.width &&
+                    player.x + player.width - 5 > obstacle.x &&
+                    player.y + 5 < obstacle.y + obstacle.height &&
+                    player.y + player.height - 5 > obstacle.y) {
+                    // 吹っ飛び効果
+                    player.isDead = true;
+                    player.deathVx = -8;
+                    player.deathVy = -12;
+                    deathTimer = 0;
+                    playHitSound();
+                    return;
+                }
+            }
+            
+            // 穴更新
+            for (let i = holes.length - 1; i >= 0; i--) {
+                const hole = holes[i];
+                hole.x -= gameSpeed;
+                
+                if (hole.x + hole.width < 0) {
+                    holes.splice(i, 1);
+                    continue;
+                }
+                
+                // 穴に落ちる判定（より精密に）
+                if (!player.invincible && player.onGround && 
+                    player.x + 10 < hole.x + hole.width && 
+                    player.x + player.width - 10 > hole.x &&
+                    player.y + player.height >= groundY) {
+                    player.isDead = true;
+                    player.deathVx = 0;
+                    player.deathVy = 3;
+                    deathTimer = 0;
+                    playHitSound();
+                    return;
+                }
+            }
+            
+            // 背景要素更新
+            for (let i = clouds.length - 1; i >= 0; i--) {
+                clouds[i].x -= gameSpeed * 0.3;
+                if (clouds[i].x + clouds[i].size < 0) clouds.splice(i, 1);
+            }
+            
+            for (let i = trees.length - 1; i >= 0; i--) {
+                trees[i].x -= gameSpeed;
+                if (trees[i].x + trees[i].width < 0) trees.splice(i, 1);
+            }
+            
+            // 新しい要素生成（バランス調整）
+            const spawnRate = 0.008 + difficulty * 0.002; // 少し緩やかに
+            if (Math.random() < spawnRate) spawnObstacle();
+            
+            if (difficulty >= 3 && Math.random() < 0.006) spawnHole();
+            
+            // アイテム出現率を難易度に応じて上げる
+            const itemRate = 0.002 + (difficulty > 5 ? 0.002 : 0);
+            if (Math.random() < itemRate) spawnItem();
+            
+            // 緑玉生成（レベル10以上）
+            if (difficulty >= 10 && Math.random() < 0.035) spawnGreenBall();
+            
+            // モグラ生成（レベル20以上）
+            if (difficulty >= 20) {
+                holes.forEach(hole => {
+                    if (Math.random() < 0.002 && hole.x < canvas.width - 100) {
+                        spawnMole(hole.x, hole.width);
+                    }
+                });
+            }
+            
+            // 天気システム
+            weatherTimer++;
+            if (weatherTimer >= weatherDuration) {
+                const weathers = ['sunny', 'cloudy', 'rainy', 'evening'];
+                weather = weathers[Math.floor(Math.random() * weathers.length)];
+                weatherTimer = 0;
+                weatherDuration = 1200 + Math.random() * 1200;
+            }
+            
+            // アイテム更新
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                item.x -= gameSpeed;
+                item.bounce += 0.1;
+                item.y += Math.sin(item.bounce) * 2;
+                
+                if (item.x + item.width < 0) {
+                    items.splice(i, 1);
+                    continue;
+                }
+                
+                // アイテム取得判定（より簡単に）
+                if (player.x < item.x + item.width &&
+                    player.x + player.width > item.x &&
+                    player.y < item.y + item.height &&
+                    player.y + player.height > item.y) {
+                    items.splice(i, 1);
+                    
+                    if (item.type === 'invincible') {
+                        player.invincible = true;
+                        player.invincibleTimer = 300;
+                        playSound(1200, 0.3, 'sine', 0.3);
+                    } else {
+                        player.tripleJumpStock++;
+                        document.getElementById('stock').textContent = player.tripleJumpStock;
+                        playSound(800, 0.2, 'sine', 0.3);
+                        setTimeout(() => playSound(1000, 0.15, 'sine', 0.2), 100);
+                    }
+                }
+            }
+            
+            // 緑玉更新
+            for (let i = greenBalls.length - 1; i >= 0; i--) {
+                const ball = greenBalls[i];
+                ball.x -= ball.speed;
+                ball.bounce += 0.2;
+                ball.y += Math.sin(ball.bounce) * 3;
+                
+                if (ball.x + ball.width < 0) {
+                    greenBalls.splice(i, 1);
+                    continue;
+                }
+                
+                // 緑玉との衝突判定
+                if (!player.invincible &&
+                    player.x + 5 < ball.x + ball.width &&
+                    player.x + player.width - 5 > ball.x &&
+                    player.y + 5 < ball.y + ball.height &&
+                    player.y + player.height - 5 > ball.y) {
+                    player.isDead = true;
+                    player.deathVx = -6;
+                    player.deathVy = -10;
+                    deathTimer = 0;
+                    playHitSound();
+                    return;
+                }
+            }
+            
+            // モグラ更新
+            for (let i = moles.length - 1; i >= 0; i--) {
+                const mole = moles[i];
+                mole.vy += 0.5;
+                mole.y += mole.vy;
+                
+                if (mole.y > groundY + 50) {
+                    moles.splice(i, 1);
+                    continue;
+                }
+                
+                if (!player.invincible &&
+                    player.x + 5 < mole.x + mole.width &&
+                    player.x + player.width - 5 > mole.x &&
+                    player.y + 5 < mole.y + mole.height &&
+                    player.y + player.height - 5 > mole.y) {
+                    player.isDead = true;
+                    player.deathVx = -6;
+                    player.deathVy = -10;
+                    deathTimer = 0;
+                    playHitSound();
+                    return;
+                }
+            }
+            
+            if (player.invincible) {
+                player.invincibleTimer--;
+                if (player.invincibleTimer <= 0) {
+                    player.invincible = false;
+                }
+            }
+            
+            spawnBackground();
+            
+            // UI更新
+            document.getElementById('distance').textContent = distance;
+            document.getElementById('difficulty').textContent = difficulty;
+            document.getElementById('stock').textContent = player.tripleJumpStock;
+        }
+        
+        // ゲームリセット
+        function gameOver() {
+            stopBGM(); // BGM停止
+            document.getElementById('finalDistance').textContent = distance;
+            document.getElementById('finalDifficulty').textContent = difficulty;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+        
+        function resetGame() {
+            distance = 0;
+            gameSpeed = 4;
+            difficulty = 1;
+            scrollOffset = 0;
+            lastObstacleX = 0;
+            deathTimer = 0;
+            player.x = 150;
+            player.y = 300;
+            player.vy = 0;
+            player.onGround = true;
+            player.canDoubleJump = false;
+            player.canTripleJump = false;
+            player.tripleJumpStock = 0;
+            player.invincible = false;
+            player.invincibleTimer = 0;
+            player.wheelRotation = 0;
+            player.isDead = false;
+            player.deathVx = 0;
+            player.deathVy = 0;
+            player.rotation = 0;
+            gameTime = 0;
+            obstacles.length = 0;
+            holes.length = 0;
+            items.length = 0;
+            greenBalls.length = 0;
+            moles.length = 0;
+            clouds.length = 0;
+            trees.length = 0;
+            weather = 'sunny';
+            weatherTimer = 0;
+        }
+        
+        // 描画
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            let skyColor1, skyColor2, skyColor3;
+            switch(weather) {
+                case 'cloudy':
+                    skyColor1 = '#B0C4DE'; skyColor2 = '#D3D3D3'; skyColor3 = '#E6E6FA';
+                    break;
+                case 'rainy':
+                    skyColor1 = '#708090'; skyColor2 = '#A9A9A9'; skyColor3 = '#C0C0C0';
+                    break;
+                case 'evening':
+                    skyColor1 = '#FF6347'; skyColor2 = '#FFB347'; skyColor3 = '#FFCCCB';
+                    break;
+                default:
+                    skyColor1 = '#87CEEB'; skyColor2 = '#98FB98'; skyColor3 = '#90EE90';
+            }
+            
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGradient.addColorStop(0, skyColor1);
+            skyGradient.addColorStop(0.7, skyColor2);
+            skyGradient.addColorStop(1, skyColor3);
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 地面描画（プロ仕様）
+            const groundGradient = ctx.createLinearGradient(0, groundY, 0, canvas.height);
+            groundGradient.addColorStop(0, '#A0522D');
+            groundGradient.addColorStop(0.3, '#8B4513');
+            groundGradient.addColorStop(0.7, '#654321');
+            groundGradient.addColorStop(1, '#3E2723');
+            ctx.fillStyle = groundGradient;
+            ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+            
+            // 地面の質感
+            ctx.fillStyle = '#6D4C41';
+            for(let x = -(scrollOffset % 60); x < canvas.width; x += 60) {
+                for(let y = groundY + 10; y < canvas.height; y += 20) {
+                    if(Math.random() > 0.7) {
+                        ctx.fillRect(x + Math.random() * 50, y, 3 + Math.random() * 4, 2);
+                    }
+                }
+            }
+            
+            // 穴描画（プロ仕様）
+            holes.forEach(hole => {
+                ctx.save();
+                // 穴の影
+                const holeGradient = ctx.createLinearGradient(hole.x, groundY, hole.x, groundY + hole.depth);
+                holeGradient.addColorStop(0, '#2F1B14');
+                holeGradient.addColorStop(0.3, '#1A0F0A');
+                holeGradient.addColorStop(1, '#000000');
+                ctx.fillStyle = holeGradient;
+                ctx.fillRect(hole.x, groundY, hole.width, hole.depth);
+                
+                // 穴の縁の土
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(hole.x - 3, groundY - 2, 3, 5);
+                ctx.fillRect(hole.x + hole.width, groundY - 2, 3, 5);
+                
+                // 穴の縁のハイライト
+                ctx.strokeStyle = '#A0522D';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(hole.x, groundY);
+                ctx.lineTo(hole.x, groundY + hole.depth);
+                ctx.moveTo(hole.x + hole.width, groundY);
+                ctx.lineTo(hole.x + hole.width, groundY + hole.depth);
+                ctx.stroke();
+                
+                // 穴の底の小石
+                ctx.fillStyle = '#444';
+                for(let i = 0; i < 3; i++) {
+                    ctx.fillRect(hole.x + 10 + i * 15, groundY + hole.depth - 3, 3, 2);
+                }
+                ctx.restore();
+            });
+            
+            // 地面のディテール
+            ctx.strokeStyle = '#5D4037';
+            ctx.lineWidth = 1;
+            for (let x = -(scrollOffset % 30); x < canvas.width; x += 30) {
+                let drawLine = true;
+                for (let hole of holes) {
+                    if (x >= hole.x - 15 && x <= hole.x + hole.width + 15) {
+                        drawLine = false;
+                        break;
+                    }
+                }
+                
+                if (drawLine) {
+                    // 草の描画
+                    ctx.strokeStyle = '#4CAF50';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(x, groundY);
+                    ctx.lineTo(x + 2, groundY - 5);
+                    ctx.moveTo(x + 5, groundY);
+                    ctx.lineTo(x + 7, groundY - 3);
+                    ctx.stroke();
+                    
+                    // 地面の線
+                    ctx.strokeStyle = '#5D4037';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(x + 10, groundY + 8);
+                    ctx.lineTo(x + 25, groundY + 8);
+                    ctx.stroke();
+                }
+            }
+            
+            // 雲描画（プロ仕様）
+            clouds.forEach(cloud => {
+                ctx.save();
+                let cloudOpacity = weather === 'cloudy' ? 0.9 : weather === 'rainy' ? 0.7 : 0.8;
+                
+                // 雲のグラデーション
+                const cloudGradient = ctx.createRadialGradient(
+                    cloud.x + cloud.size, cloud.y, 0,
+                    cloud.x + cloud.size, cloud.y, cloud.size * 1.5
+                );
+                
+                if (weather === 'evening') {
+                    cloudGradient.addColorStop(0, 'rgba(255,182,193,0.9)');
+                    cloudGradient.addColorStop(0.6, 'rgba(255,160,160,0.7)');
+                    cloudGradient.addColorStop(1, 'rgba(255,140,140,0.5)');
+                } else {
+                    cloudGradient.addColorStop(0, `rgba(255,255,255,${cloudOpacity})`);
+                    cloudGradient.addColorStop(0.6, `rgba(240,240,240,${cloudOpacity * 0.8})`);
+                    cloudGradient.addColorStop(1, `rgba(220,220,220,${cloudOpacity * 0.6})`);
+                }
+                
+                ctx.fillStyle = cloudGradient;
+                
+                // より自然な雲の形
+                ctx.beginPath();
+                ctx.arc(cloud.x, cloud.y, cloud.size * 0.8, 0, Math.PI * 2);
+                ctx.arc(cloud.x + cloud.size * 0.6, cloud.y - cloud.size * 0.2, cloud.size * 0.6, 0, Math.PI * 2);
+                ctx.arc(cloud.x + cloud.size * 1.2, cloud.y, cloud.size * 0.9, 0, Math.PI * 2);
+                ctx.arc(cloud.x + cloud.size * 1.8, cloud.y + cloud.size * 0.1, cloud.size * 0.7, 0, Math.PI * 2);
+                ctx.arc(cloud.x + cloud.size * 0.9, cloud.y + cloud.size * 0.3, cloud.size * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            });
+            
+            // 雨の描画（プロ仕様）
+            if (weather === 'rainy') {
+                ctx.save();
+                ctx.globalAlpha = 0.7;
+                
+                // 雨粒のグラデーション
+                for (let i = 0; i < 80; i++) {
+                    const x = (gameTime * 4 + i * 12) % (canvas.width + 50);
+                    const y = (gameTime * 10 + i * 15) % (canvas.height + 30);
+                    
+                    const rainGradient = ctx.createLinearGradient(x, y, x - 2, y + 12);
+                    rainGradient.addColorStop(0, 'rgba(173,216,230,0.8)');
+                    rainGradient.addColorStop(1, 'rgba(135,206,235,0.3)');
+                    
+                    ctx.strokeStyle = rainGradient;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x - 2, y + 12);
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
+            }
+            
+            // 木描画（プロ仕様）
+            trees.forEach(tree => {
+                ctx.save();
+                // 木の影
+                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                ctx.fillRect(tree.x + 5, groundY + 5, tree.width, 8);
+                
+                // 幹のグラデーション
+                const trunkGradient = ctx.createLinearGradient(tree.x, tree.y, tree.x + tree.width, tree.y);
+                trunkGradient.addColorStop(0, '#654321');
+                trunkGradient.addColorStop(0.5, '#8B4513');
+                trunkGradient.addColorStop(1, '#A0522D');
+                ctx.fillStyle = trunkGradient;
+                ctx.fillRect(tree.x, tree.y, tree.width, tree.height);
+                
+                // 幹の質感
+                ctx.strokeStyle = '#5D4037';
+                ctx.lineWidth = 1;
+                for(let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(tree.x + 2, tree.y + 20 + i * 15);
+                    ctx.lineTo(tree.x + tree.width - 2, tree.y + 20 + i * 15);
+                    ctx.stroke();
+                }
+                
+                // 葉っぱ（多層）
+                const leafGradient = ctx.createRadialGradient(tree.x + 10, tree.y, 0, tree.x + 10, tree.y, 25);
+                leafGradient.addColorStop(0, '#90EE90');
+                leafGradient.addColorStop(0.7, '#228B22');
+                leafGradient.addColorStop(1, '#006400');
+                ctx.fillStyle = leafGradient;
+                ctx.beginPath();
+                ctx.arc(tree.x + 10, tree.y, 25, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 葉っぱのハイライト
+                ctx.fillStyle = '#ADFF2F';
+                ctx.beginPath();
+                ctx.arc(tree.x + 5, tree.y - 5, 8, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            });
+            
+            // プレイヤー（トロッコ）描画（プロ仕様）
+            ctx.save();
+            
+            // トロッコの影
+            if (!player.isDead) {
+                ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                ctx.fillRect(player.x + 8, groundY + 2, player.width, 6);
+            }
+            
+            if (player.isDead) {
+                ctx.translate(player.x + player.width/2, player.y + player.height/2);
+                ctx.rotate(player.rotation);
+                ctx.translate(-player.width/2, -player.height/2);
+            } else {
+                ctx.translate(player.x, player.y);
+            }
+            
+            if (player.invincible && Math.floor(gameTime / 5) % 2) {
+                ctx.globalAlpha = 0.5;
+                ctx.shadowColor = '#FFD700';
+                ctx.shadowBlur = 15;
+            }
+            
+            // トロッコ本体のグラデーション
+            const cartGradient = ctx.createLinearGradient(0, 0, 0, player.height);
+            cartGradient.addColorStop(0, '#FF8C00');
+            cartGradient.addColorStop(0.3, '#FF6600');
+            cartGradient.addColorStop(0.7, '#E55100');
+            cartGradient.addColorStop(1, '#BF360C');
+            ctx.fillStyle = cartGradient;
+            ctx.fillRect(0, 0, player.width, player.height - 15);
+            
+            // トロッコの縁取り
+            ctx.strokeStyle = '#D84315';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(0, 0, player.width, player.height - 15);
+            
+            // トロッコの装飾
+            ctx.fillStyle = '#FFB74D';
+            ctx.fillRect(5, 5, player.width - 10, 3);
+            ctx.fillRect(5, player.height - 25, player.width - 10, 3);
+            
+            // 車輪（メタリック）
+            const wheelGradient = ctx.createRadialGradient(10, 35, 0, 10, 35, 8);
+            wheelGradient.addColorStop(0, '#666');
+            wheelGradient.addColorStop(0.7, '#333');
+            wheelGradient.addColorStop(1, '#111');
+            ctx.fillStyle = wheelGradient;
+            ctx.beginPath();
+            ctx.arc(10, 35, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(40, 35, 8, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 車輪の縁
+            ctx.strokeStyle = '#888';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(10, 35, 8, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(40, 35, 8, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // スポーク（メタリック）
+            ctx.strokeStyle = '#AAA';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 4; i++) {
+                const angle = player.wheelRotation + (i * Math.PI / 2);
+                ctx.beginPath();
+                ctx.moveTo(10, 35);
+                ctx.lineTo(10 + Math.cos(angle) * 6, 35 + Math.sin(angle) * 6);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(40, 35);
+                ctx.lineTo(40 + Math.cos(angle) * 6, 35 + Math.sin(angle) * 6);
+                ctx.stroke();
+            }
+            
+            // 車輪の中心
+            ctx.fillStyle = '#555';
+            ctx.beginPath();
+            ctx.arc(10, 35, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(40, 35, 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
+            ctx.restore();
+            
+            // アイテム描画
+            items.forEach(item => {
+                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                ctx.fillRect(item.x + 4, groundY - 2, item.width, 4);
+                
+                ctx.save();
+                
+                if (item.type === 'invincible') {
+                    ctx.shadowColor = '#FF69B4';
+                    ctx.shadowBlur = 20;
+                    
+                    const gradient = ctx.createLinearGradient(item.x, item.y, item.x, item.y + item.height);
+                    gradient.addColorStop(0, '#FF1493');
+                    gradient.addColorStop(0.5, '#FF69B4');
+                    gradient.addColorStop(1, '#FFB6C1');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(item.x, item.y, item.width, item.height);
+                    
+                    ctx.strokeStyle = '#FF00FF';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(item.x, item.y, item.width, item.height);
+                    
+                    ctx.fillStyle = '#FFF';
+                    ctx.font = 'bold 16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('★', item.x + item.width/2, item.y + item.height/2 + 5);
+                } else {
+                    ctx.shadowColor = '#FFD700';
+                    ctx.shadowBlur = 15;
+                    
+                    const gradient = ctx.createLinearGradient(item.x, item.y, item.x, item.y + item.height);
+                    gradient.addColorStop(0, '#FFF700');
+                    gradient.addColorStop(0.5, '#FFD700');
+                    gradient.addColorStop(1, '#FFA500');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(item.x, item.y, item.width, item.height);
+                    
+                    ctx.strokeStyle = '#FFFF00';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(item.x, item.y, item.width, item.height);
+                    
+                    ctx.fillStyle = '#000';
+                    ctx.font = 'bold 18px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('3', item.x + item.width/2, item.y + item.height/2 + 6);
+                }
+                
+                ctx.restore();
+            });
+            
+            // モグラ描画（プロ仕様）
+            moles.forEach(mole => {
+                ctx.save();
+                
+                // モグラの体のグラデーション
+                const moleGradient = ctx.createLinearGradient(mole.x, mole.y, mole.x + mole.width, mole.y);
+                moleGradient.addColorStop(0, '#A0522D');
+                moleGradient.addColorStop(0.5, '#8B4513');
+                moleGradient.addColorStop(1, '#654321');
+                ctx.fillStyle = moleGradient;
+                
+                // 丸い体
+                ctx.beginPath();
+                ctx.arc(mole.x + mole.width/2, mole.y + mole.height/2, mole.width/2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 目（つぶら）
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(mole.x + 8, mole.y + 8, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(mole.x + 22, mole.y + 8, 3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 目のハイライト
+                ctx.fillStyle = '#FFF';
+                ctx.beginPath();
+                ctx.arc(mole.x + 9, mole.y + 7, 1, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(mole.x + 23, mole.y + 7, 1, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 鼻（ピンク）
+                ctx.fillStyle = '#FFB6C1';
+                ctx.beginPath();
+                ctx.arc(mole.x + 15, mole.y + 15, 3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 手
+                ctx.fillStyle = '#654321';
+                ctx.fillRect(mole.x - 3, mole.y + 10, 6, 8);
+                ctx.fillRect(mole.x + mole.width - 3, mole.y + 10, 6, 8);
+                
+                ctx.restore();
+            });
+            
+            // 緑玉描画（強化）
+            greenBalls.forEach(ball => {
+                ctx.save();
+                
+                // グロー効果
+                ctx.shadowColor = '#32CD32';
+                ctx.shadowBlur = 12;
+                
+                // グラデーション
+                const gradient = ctx.createRadialGradient(
+                    ball.x + ball.width/2, ball.y + ball.height/2, 0,
+                    ball.x + ball.width/2, ball.y + ball.height/2, ball.width/2
+                );
+                gradient.addColorStop(0, '#90EE90');
+                gradient.addColorStop(0.7, '#228B22');
+                gradient.addColorStop(1, '#006400');
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(ball.x + ball.width/2, ball.y + ball.height/2, ball.width/2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 光る縁取り
+                ctx.strokeStyle = '#00FF00';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                ctx.restore();
+            });
+            
+            // 障害物描画（プロ仕様）
+            obstacles.forEach(obstacle => {
+                ctx.save();
+                
+                // 障害物の影
+                ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                ctx.fillRect(obstacle.x + 5, groundY + 2, obstacle.width, 6);
+                
+                if (obstacle.type === 'rock') {
+                    // 岩のグラデーション
+                    const rockGradient = ctx.createRadialGradient(
+                        obstacle.x + obstacle.width/2, obstacle.y + obstacle.height/2, 0,
+                        obstacle.x + obstacle.width/2, obstacle.y + obstacle.height/2, obstacle.width/2
+                    );
+                    rockGradient.addColorStop(0, '#888');
+                    rockGradient.addColorStop(0.6, '#666');
+                    rockGradient.addColorStop(1, '#333');
+                    ctx.fillStyle = rockGradient;
+                    
+                    // 不規則な岩の形
+                    ctx.beginPath();
+                    ctx.moveTo(obstacle.x + 5, obstacle.y + obstacle.height);
+                    ctx.lineTo(obstacle.x, obstacle.y + 15);
+                    ctx.lineTo(obstacle.x + 8, obstacle.y + 5);
+                    ctx.lineTo(obstacle.x + 20, obstacle.y);
+                    ctx.lineTo(obstacle.x + 28, obstacle.y + 8);
+                    ctx.lineTo(obstacle.x + 30, obstacle.y + obstacle.height);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // 岩の質感
+                    ctx.fillStyle = '#AAA';
+                    ctx.fillRect(obstacle.x + 8, obstacle.y + 8, 4, 3);
+                    ctx.fillRect(obstacle.x + 18, obstacle.y + 12, 3, 2);
+                    
+                } else {
+                    // 柵のグラデーション
+                    const fenceGradient = ctx.createLinearGradient(obstacle.x, obstacle.y, obstacle.x + obstacle.width, obstacle.y);
+                    fenceGradient.addColorStop(0, '#A0522D');
+                    fenceGradient.addColorStop(0.5, '#8B4513');
+                    fenceGradient.addColorStop(1, '#654321');
+                    ctx.fillStyle = fenceGradient;
+                    ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+                    
+                    // 木の質感
+                    ctx.strokeStyle = '#5D4037';
+                    ctx.lineWidth = 1;
+                    for(let i = 0; i < Math.floor(obstacle.height / 8); i++) {
+                        ctx.beginPath();
+                        ctx.moveTo(obstacle.x + 2, obstacle.y + 5 + i * 8);
+                        ctx.lineTo(obstacle.x + obstacle.width - 2, obstacle.y + 5 + i * 8);
+                        ctx.stroke();
+                    }
+                    
+                    // 高い柵の警告
+                    if (obstacle.type === 'high_fence') {
+                        const warningGradient = ctx.createLinearGradient(obstacle.x, obstacle.y, obstacle.x + obstacle.width, obstacle.y);
+                        warningGradient.addColorStop(0, '#FF5722');
+                        warningGradient.addColorStop(0.5, '#FF0000');
+                        warningGradient.addColorStop(1, '#D32F2F');
+                        ctx.fillStyle = warningGradient;
+                        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, 8);
+                        
+                        // 警告ストライプ
+                        ctx.fillStyle = '#FFEB3B';
+                        for(let i = 0; i < obstacle.width; i += 8) {
+                            ctx.fillRect(obstacle.x + i, obstacle.y + 2, 4, 4);
+                        }
+                    }
+                }
+                
+                ctx.restore();
+            });
+        }
+        
+        // ゲームループ
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        gameLoop();
+    </script>
+</body>
+</html>

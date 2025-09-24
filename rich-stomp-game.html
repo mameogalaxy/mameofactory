@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>連続踏みつけタイミングゲーム</title>
+    <style>
+        body { 
+            margin: 0; padding: 20px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff; font-family: 'Arial', sans-serif; text-align: center;
+            min-height: 100vh;
+        }
+        h1 {
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.5);
+            font-size: 2.5em;
+            margin: 20px 0;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        canvas { 
+            border: 3px solid #fff; 
+            background: linear-gradient(to bottom, #87CEEB 0%, #98FB98 70%, #90EE90 100%);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border-radius: 10px;
+        }
+        #info { 
+            font-size: 22px; margin: 15px;
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        p {
+            font-size: 16px;
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            border-radius: 10px;
+            margin: 20px auto;
+            max-width: 600px;
+        }
+    </style>
+</head>
+<body>
+    <h1>連続踏みつけタイミングゲーム</h1>
+    <div id="info">スコア: <span id="score">0</span> | 連続回数: <span id="combo">0</span> | 最高記録: <span id="maxCombo">0</span></div>
+    <canvas id="game" width="800" height="600"></canvas>
+    <p>スペース/クリック: タイミングジャンプ | 矢印キー: 移動 | 敵の上でタイミングよくジャンプ！</p>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        
+        let score = 0;
+        let combo = 0;
+        let maxCombo = 0;
+        
+        // プレイヤー
+        const player = { 
+            x: 100, y: 450, width: 40, height: 40, 
+            vx: 0, vy: 0, speed: 5, jumpPower: 15,
+            onGround: false, canDoubleJump: false
+        };
+        
+        // 敵（1体のみ）
+        let enemy = null;
+        let stompCount = 0;
+        let lastStompTime = 0;
+        let timeLimit = 3000;
+        let perfectZone = 40; // パーフェクトゾーンのサイズ
+        let clickRequested = false;
+        let actionCommandActive = false;
+        let actionTimer = 0;
+        let actionDuration = 120; // 2秒間
+        
+        // パーティクル効果
+        const particles = [];
+        
+        // アニメーション用
+        let gameTime = 0;
+        
+        // 重力
+        const gravity = 0.8;
+        const groundY = 500;
+        
+        // キー入力
+        const keys = {};
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (player.onGround) {
+                    player.vy = -player.jumpPower;
+                    player.onGround = false;
+                    player.canDoubleJump = true;
+                } else if (player.canDoubleJump) {
+                    player.vy = -player.jumpPower * 0.8;
+                    player.canDoubleJump = false;
+                }
+                clickRequested = true;
+            }
+        });
+        
+        // クリックイベントも追加
+        canvas.addEventListener('click', () => {
+            clickRequested = true;
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        // 敵生成
+        function spawnEnemy() {
+            enemy = {
+                x: 300 + Math.random() * 200,
+                y: groundY - 40,
+                width: 40,
+                height: 40,
+                hue: Math.random() * 360,
+                wobble: 0
+            };
+            stompCount = 0;
+            lastStompTime = Date.now();
+        }
+        
+        // パーティクル生成
+        function createParticles(x, y, color, count = 8) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: Math.random() * -5 - 3,
+                    life: 60,
+                    maxLife: 60,
+                    color: color,
+                    size: Math.random() * 4 + 2
+                });
+            }
+        }
+        
+        // グラデーション描画ヘルパー
+        function drawGradientRect(x, y, w, h, color1, color2) {
+            const gradient = ctx.createLinearGradient(x, y, x, y + h);
+            gradient.addColorStop(0, color1);
+            gradient.addColorStop(1, color2);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x, y, w, h);
+        }
+        
+        // 影描画ヘルパー
+        function drawShadow(x, y, w, h, blur = 5) {
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            ctx.shadowBlur = blur;
+            ctx.shadowOffsetX = 3;
+            ctx.shadowOffsetY = 3;
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.fillRect(x, y, w, h);
+            ctx.restore();
+        }
+        
+        // 衝突判定
+        function collision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+        
+        // アクションコマンド開始
+        function startActionCommand() {
+            actionCommandActive = true;
+            actionTimer = 0;
+            // 回数が増えるほど時間が短くなる
+            actionDuration = Math.max(20, 60 - stompCount * 4);
+        }
+        
+        // アクションコマンド判定
+        function checkActionCommand() {
+            if (!clickRequested || !actionCommandActive) return false;
+            
+            const progress = actionTimer / actionDuration;
+            
+            // 回数が増えるほどパーフェクトゾーンが狭くなる
+            const zoneSize = Math.max(0.1, 0.3 - stompCount * 0.02);
+            const adjustedStart = 0.5 - zoneSize / 2;
+            const adjustedEnd = 0.5 + zoneSize / 2;
+            
+            return progress >= adjustedStart && progress <= adjustedEnd;
+        }
+        
+        // 更新
+        function update() {
+            gameTime++;
+            
+            // プレイヤー移動（アクションコマンド中は移動禁止）
+            if (!actionCommandActive) {
+                if (keys['ArrowLeft']) player.vx = -player.speed;
+                else if (keys['ArrowRight']) player.vx = player.speed;
+                else player.vx *= 0.8;
+            }
+            
+            // 重力適用
+            player.vy += gravity;
+            
+            // プレイヤー位置更新
+            player.x += player.vx;
+            player.y += player.vy;
+            
+            // 画面端制限
+            if (player.x < 0) player.x = 0;
+            if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+            
+            // 地面判定
+            if (player.y + player.height >= groundY) {
+                player.y = groundY - player.height;
+                player.vy = 0;
+                player.onGround = true;
+                player.canDoubleJump = false;
+            }
+            
+            // 敵の上にいるかチェック（跳ねる効果）
+            if (enemy && !actionCommandActive && 
+                player.x < enemy.x + enemy.width && player.x + player.width > enemy.x &&
+                Math.abs(player.y + player.height - enemy.y) < 5) {
+                player.y = enemy.y - player.height;
+                player.x = enemy.x + (enemy.width - player.width) / 2; // 中央に固定
+                if (player.vy > 0) {
+                    player.vy = -2; // 小さな跳ね返り
+                }
+                player.onGround = true;
+                player.canDoubleJump = false;
+            }
+            
+            // 敵がいない場合は生成
+            if (!enemy) {
+                spawnEnemy();
+            }
+            
+            // 敵更新
+            if (enemy) {
+                // プレイヤーが敵の上に着地したらアクションコマンド開始
+                if (!actionCommandActive && player.vy > 0 && 
+                    player.x < enemy.x + enemy.width && player.x + player.width > enemy.x &&
+                    player.y + player.height >= enemy.y && player.y + player.height <= enemy.y + 10) {
+                    player.y = enemy.y - player.height;
+                    player.x = enemy.x + (enemy.width - player.width) / 2; // 敵の中央に固定
+                    player.vx = 0;
+                    player.vy = 0;
+                    player.onGround = true;
+                    startActionCommand();
+                    
+                    // 小さなバウンス効果
+                    player.vy = -3;
+                }
+                
+                // アクションコマンド中は敵の上に固定
+                if (actionCommandActive && 
+                    player.x < enemy.x + enemy.width && player.x + player.width > enemy.x &&
+                    Math.abs(player.y + player.height - enemy.y) < 15) {
+                    player.x = enemy.x + (enemy.width - player.width) / 2; // 敵の中央に固定
+                    player.vx = 0;
+                }
+                
+                // 敵との横方向衝突を防ぐ（アクションコマンド中以外）
+                if (!actionCommandActive && player.y + player.height > enemy.y + 5 && player.y < enemy.y + enemy.height - 5) {
+                    if (player.x + player.width > enemy.x && player.x < enemy.x + enemy.width) {
+                        if (player.x < enemy.x) {
+                            player.x = enemy.x - player.width;
+                        } else {
+                            player.x = enemy.x + enemy.width;
+                        }
+                        player.vx = 0;
+                    }
+                }
+                
+                // アクションコマンド中の処理
+                if (actionCommandActive) {
+                    actionTimer++;
+                    
+                    // タイミングチェック
+                    if (checkActionCommand()) {
+                        stompCount++;
+                        combo = stompCount;
+                        score += 100 * stompCount;
+                        lastStompTime = Date.now();
+                        clickRequested = false;
+                        actionCommandActive = false;
+                        
+                        // プレイヤーを跳ね返す（少し強め）
+                        player.vy = -player.jumpPower * 0.9;
+                        player.x = enemy.x + (enemy.width - player.width) / 2; // 中央に固定
+                        
+                        // 敵の色変化
+                        enemy.hue = (enemy.hue + 60) % 360;
+                        
+                        // パーティクル効果
+                        createParticles(enemy.x + 20, enemy.y + 20, 
+                                       `hsl(${enemy.hue}, 70%, 60%)`, 12);
+                        
+                        if (stompCount > maxCombo) {
+                            maxCombo = stompCount;
+                            document.getElementById('maxCombo').textContent = maxCombo;
+                        }
+                        
+                        document.getElementById('score').textContent = score;
+                        document.getElementById('combo').textContent = combo;
+                    } else if (clickRequested) {
+                        // タイミングミス - 敵から降りる
+                        stompCount = 0;
+                        combo = 0;
+                        actionCommandActive = false;
+                        document.getElementById('combo').textContent = combo;
+                        
+                        // 敵から弾き飛ばされる
+                        player.vy = -5;
+                        player.vx = player.x < enemy.x ? -3 : 3;
+                    } else if (actionTimer >= actionDuration) {
+                        // 時間切れ - 敵から降りる
+                        stompCount = 0;
+                        combo = 0;
+                        actionCommandActive = false;
+                        document.getElementById('combo').textContent = combo;
+                        
+                        // 敵から弾き飛ばされる
+                        player.vy = -5;
+                        player.vx = player.x < enemy.x ? -3 : 3;
+                    }
+                }
+                
+                // クリックリセット
+                if (clickRequested) {
+                    clickRequested = false;
+                }
+                
+                // 敵のアニメーション
+                enemy.wobble += 0.1;
+                
+
+            }
+            
+            // パーティクル更新
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.2;
+                p.life--;
+                
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+        
+        // ゲームリセット
+        function resetGame() {
+            score = 0;
+            combo = 0;
+            stompCount = 0;
+            player.x = 100;
+            player.y = 450;
+            player.vx = 0;
+            player.vy = 0;
+            player.onGround = false;
+            enemy = null;
+            document.getElementById('score').textContent = score;
+            document.getElementById('combo').textContent = combo;
+        }
+        
+        // 描画
+        function draw() {
+            // 空のグラデーション背景
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGradient.addColorStop(0, '#87CEEB');
+            skyGradient.addColorStop(0.7, '#98FB98');
+            skyGradient.addColorStop(1, '#90EE90');
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 雲の描画
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            for (let i = 0; i < 3; i++) {
+                const x = (gameTime * 0.5 + i * 200) % (canvas.width + 100) - 50;
+                ctx.beginPath();
+                ctx.arc(x, 80 + i * 30, 30, 0, Math.PI * 2);
+                ctx.arc(x + 25, 80 + i * 30, 35, 0, Math.PI * 2);
+                ctx.arc(x + 50, 80 + i * 30, 30, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // 地面描画（グラデーション）
+            drawGradientRect(0, groundY, canvas.width, canvas.height - groundY, 
+                           '#8B4513', '#654321');
+            
+            // 草の描画
+            ctx.fillStyle = '#228B22';
+            for (let x = 0; x < canvas.width; x += 20) {
+                const grassHeight = 5 + Math.sin(x * 0.1 + gameTime * 0.05) * 3;
+                ctx.fillRect(x, groundY - grassHeight, 3, grassHeight);
+            }
+            
+            // プレイヤー描画（影付き）
+            drawShadow(player.x, player.y, player.width, player.height);
+            
+            // プレイヤー本体（グラデーション）
+            drawGradientRect(player.x, player.y, player.width, player.height, 
+                           '#00ff88', '#00cc44');
+            
+            // プレイヤーの輪郭
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(player.x, player.y, player.width, player.height);
+            
+            // 目を描画（立体的）
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(player.x + 8, player.y + 8, 8, 8);
+            ctx.fillRect(player.x + 24, player.y + 8, 8, 8);
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(player.x + 10, player.y + 10, 4, 4);
+            ctx.fillRect(player.x + 26, player.y + 10, 4, 4);
+            
+            // ハイライト
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(player.x + 11, player.y + 11, 1, 1);
+            ctx.fillRect(player.x + 27, player.y + 11, 1, 1);
+            
+            // 敵描画
+            if (enemy) {
+                const wobbleX = Math.sin(enemy.wobble) * 2;
+                
+                // 敵の影
+                drawShadow(enemy.x + wobbleX, enemy.y, enemy.width, enemy.height, 8);
+                
+                // 敵本体（グラデーション + アニメーション）
+                const enemyColor1 = `hsl(${enemy.hue}, 70%, 70%)`;
+                const enemyColor2 = `hsl(${enemy.hue}, 70%, 40%)`;
+                drawGradientRect(enemy.x + wobbleX, enemy.y, enemy.width, enemy.height, 
+                               enemyColor1, enemyColor2);
+                
+                // 敵の輪郭（光る効果）
+                ctx.strokeStyle = `hsl(${enemy.hue}, 100%, 80%)`;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(enemy.x + wobbleX, enemy.y, enemy.width, enemy.height);
+                
+                // 敵の目（アニメーション）
+                const eyeOffset = Math.sin(gameTime * 0.1) * 1;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(enemy.x + 8 + wobbleX, enemy.y + 8 + eyeOffset, 8, 8);
+                ctx.fillRect(enemy.x + 24 + wobbleX, enemy.y + 8 + eyeOffset, 8, 8);
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(enemy.x + 10 + wobbleX, enemy.y + 10 + eyeOffset, 4, 4);
+                ctx.fillRect(enemy.x + 26 + wobbleX, enemy.y + 10 + eyeOffset, 4, 4);
+                
+                // 踏みつけ回数表示（光る効果）
+                if (stompCount > 0) {
+                    ctx.save();
+                    ctx.shadowColor = '#ffffff';
+                    ctx.shadowBlur = 10;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 24px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(stompCount.toString(), enemy.x + 20 + wobbleX, enemy.y - 15);
+                    ctx.restore();
+                }
+                
+
+                
+
+            }
+            
+            // パーティクル描画
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = p.life / p.maxLife;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+            
+            // 連続踏みつけ表示（豪華エフェクト）
+            if (stompCount > 0) {
+                ctx.save();
+                
+                // 文字の影とグロー効果
+                ctx.shadowColor = '#ffff00';
+                ctx.shadowBlur = 20;
+                
+                // メインテキスト
+                const textScale = 1 + Math.sin(gameTime * 0.2) * 0.1;
+                ctx.font = `bold ${32 * textScale}px Arial`;
+                ctx.textAlign = 'center';
+                
+                // グラデーションテキスト
+                const textGradient = ctx.createLinearGradient(0, 80, 0, 120);
+                textGradient.addColorStop(0, '#ffff00');
+                textGradient.addColorStop(0.5, '#ff8800');
+                textGradient.addColorStop(1, '#ff0000');
+                ctx.fillStyle = textGradient;
+                
+                ctx.fillText(`${stompCount}回連続！`, canvas.width / 2, 100);
+                
+                // 励ましメッセージ（アニメーション付き）
+                if (stompCount >= 10) {
+                    ctx.shadowColor = '#ff00ff';
+                    ctx.shadowBlur = 15;
+                    ctx.fillStyle = '#ff00ff';
+                    ctx.font = `bold ${24 + Math.sin(gameTime * 0.3) * 3}px Arial`;
+                    ctx.fillText('すごい！', canvas.width / 2, 130);
+                } else if (stompCount >= 5) {
+                    ctx.shadowColor = '#00ffff';
+                    ctx.shadowBlur = 10;
+                    ctx.fillStyle = '#00ffff';
+                    ctx.font = 'bold 20px Arial';
+                    ctx.fillText('いいぞ！', canvas.width / 2, 130);
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        // ゲームループ
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        gameLoop();
+    </script>
+</body>
+</html>

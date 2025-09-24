@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>間取りタワーディフェンス</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            z-index: 1000;
+        }
+
+        .overlay h1 {
+            font-size: 3rem;
+            margin-bottom: 2rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .overlay button {
+            font-size: 1.5rem;
+            padding: 15px 30px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .overlay button:hover {
+            background: #45a049;
+        }
+
+        #game-container {
+            display: none;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #game-container.active {
+            display: flex;
+        }
+
+        #game-canvas {
+            flex: 1;
+            background-color: #fff;
+            touch-action: none;
+        }
+
+        #mobile-ui {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            display: none;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: space-around;
+        }
+
+        #mobile-ui.active {
+            display: flex;
+        }
+
+        .unit-btn, .unit-button {
+            padding: 12px;
+            background: linear-gradient(145deg, #f0f0f0, #e6e6e6);
+            color: #333;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            font-size: 12px;
+            min-width: 80px;
+            text-align: center;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .unit-button {
+            background: linear-gradient(145deg, #fff, #f5f5f5);
+            border: 2px solid #e0e0e0;
+            padding: 15px;
+        }
+        
+        .unit-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        .unit-btn.selected, .unit-button.selected {
+            border-color: #4CAF50;
+            background: linear-gradient(145deg, #e8f5e8, #d4edda);
+            transform: translateY(-2px);
+        }
+
+        .unit-btn:disabled, .unit-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .unit-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            position: relative;
+            margin: 0 auto;
+        }
+
+        .unit-icon.small {
+            width: 24px;
+            height: 24px;
+        }
+
+        .cat-icon {
+            background: linear-gradient(145deg, #FFB6C1, #FF91A4);
+            border: 2px solid #FF69B4;
+        }
+
+        .cat-icon::before {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: 6px;
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-bottom: 8px solid #FF69B4;
+        }
+
+        .cat-icon::after {
+            content: '';
+            position: absolute;
+            top: -3px;
+            right: 6px;
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-bottom: 8px solid #FF69B4;
+        }
+
+        .dog-icon {
+            background: linear-gradient(145deg, #DEB887, #D2B48C);
+            border: 2px solid #CD853F;
+        }
+
+        .dog-icon::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: -2px;
+            width: 8px;
+            height: 12px;
+            background: #CD853F;
+            border-radius: 50% 0 50% 50%;
+        }
+
+        .dog-icon::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            right: -2px;
+            width: 8px;
+            height: 12px;
+            background: #CD853F;
+            border-radius: 0 50% 50% 50%;
+        }
+
+        .robot-icon {
+            background: linear-gradient(145deg, #C0C0C0, #A9A9A9);
+            border: 2px solid #808080;
+            border-radius: 20%;
+        }
+
+        .robot-icon::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            width: 4px;
+            height: 4px;
+            background: #FF0000;
+            border-radius: 50%;
+            box-shadow: 8px 0 0 #FF0000, 4px 6px 0 #00FF00;
+        }
+
+        #auto-spawn-button, #auto-btn {
+            background: linear-gradient(145deg, #FF6B6B, #FF5252);
+            color: white;
+        }
+
+        #auto-spawn-button.active, #auto-btn.active {
+            background: linear-gradient(145deg, #4CAF50, #45a049);
+        }
+
+        #status {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        @media (min-width: 768px) {
+            #game-container {
+                flex-direction: row;
+            }
+            #mobile-ui {
+                display: none !important;
+            }
+            #ui-panel {
+                width: 200px;
+                padding: 15px;
+                background: #fafafa;
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="start-screen" class="overlay">
+        <h1>間取りタワーディフェンス</h1>
+        <button id="start-btn">ゲーム開始</button>
+    </div>
+
+    <div id="game-over-screen" class="overlay" style="display: none;">
+        <h1>ゲームオーバー</h1>
+        <p>最終ステージ: <span id="final-stage">1</span></p>
+        <button id="retry-btn">リトライ</button>
+    </div>
+
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        
+        <div id="ui-panel" style="display: none;">
+            <h2>情報</h2>
+            <div id="status-desktop">
+                <p>ステージ: <span id="stage-number">1</span></p>
+                <p>お金: <span id="money-count">1000</span>円</p>
+                <p>城HP: <span id="life-count">8</span></p>
+            </div>
+            <h2>タワー選択</h2>
+            <div id="unit-selection">
+                <button class="unit-button" data-unit="cat" data-cost="75">
+                    <div class="unit-icon cat-icon"></div>
+                    <span>ねこ (75円)</span>
+                </button>
+                <button class="unit-button" data-unit="dog" data-cost="150">
+                    <div class="unit-icon dog-icon"></div>
+                    <span>いぬ (150円)</span>
+                </button>
+                <button class="unit-button" data-unit="robot" data-cost="300">
+                    <div class="unit-icon robot-icon"></div>
+                    <span>ロボ (300円)</span>
+                </button>
+            </div>
+            <button id="auto-spawn-button">自動出撃 OFF</button>
+        </div>
+    </div>
+
+    <div id="status">
+        <div>ステージ: <span id="stage-mobile">1</span></div>
+        <div>お金: <span id="money-mobile">1000</span>円</div>
+        <div>城HP: <span id="life-mobile">8</span></div>
+    </div>
+
+    <div id="mobile-ui">
+        <button class="unit-btn" data-unit="cat" data-cost="75">
+            <div class="unit-icon cat-icon small"></div>
+            <span>75円</span>
+        </button>
+        <button class="unit-btn" data-unit="dog" data-cost="150">
+            <div class="unit-icon dog-icon small"></div>
+            <span>150円</span>
+        </button>
+        <button class="unit-btn" data-unit="robot" data-cost="300">
+            <div class="unit-icon robot-icon small"></div>
+            <span>300円</span>
+        </button>
+        <button id="auto-btn">自動出撃</button>
+    </div>
+
+    <script>
+        let gameState = {
+            stage: 1,
+            money: 1000,
+            life: 8,
+            selectedUnit: null,
+            units: [],
+            enemies: [],
+            bullets: [],
+            waveActive: false,
+            enemySpawnTimer: 0,
+            enemiesSpawned: 0,
+            maxEnemies: 5,
+            gameStarted: false,
+            autoSpawn: false
+        };
+
+        const unitTypes = {
+            cat: { cost: 75, damage: 20, range: 120, fireRate: 60, health: 100, speed: 2, color: '#FFB6C1', size: 20 },
+            dog: { cost: 150, damage: 35, range: 100, fireRate: 45, health: 150, speed: 1.5, color: '#DEB887', size: 25 },
+            robot: { cost: 300, damage: 60, range: 150, fireRate: 90, health: 200, speed: 1, color: '#C0C0C0', size: 30 }
+        };
+
+        const enemyTypes = {
+            mouse: { health: 80, speed: 1.5, damage: 15, color: '#8B4513', size: 18 },
+            rat: { health: 120, speed: 1.2, damage: 25, color: '#696969', size: 22 },
+            monster: { health: 200, speed: 0.8, damage: 40, color: '#800080', size: 28 }
+        };
+
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        let audioContext, bgm;
+        let isMobile = window.innerWidth <= 768;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (gameState.gameStarted) drawStageLayout();
+        }
+
+        function initAudio() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.frequency.setValueAtTime(220, audioContext.currentTime);
+                gainNode.gain.setValueAtTime(0.05, audioContext.currentTime);
+                oscillator.start();
+                bgm = { oscillator, gainNode };
+            } catch (e) {
+                console.log('Audio not supported');
+            }
+        }
+
+        function startGame() {
+            initAudio();
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('game-container').classList.add('active');
+            if (isMobile) {
+                document.getElementById('mobile-ui').classList.add('active');
+            } else {
+                document.getElementById('ui-panel').style.display = 'flex';
+            }
+            gameState.gameStarted = true;
+            resizeCanvas();
+            setupEventListeners();
+            gameLoop();
+        }
+
+        function gameOver() {
+            document.getElementById('final-stage').textContent = gameState.stage;
+            document.getElementById('game-over-screen').style.display = 'flex';
+            if (bgm && bgm.oscillator) {
+                try {
+                    bgm.oscillator.stop();
+                } catch (e) {}
+                bgm = null;
+            }
+        }
+
+        function resetGame() {
+            gameState = {
+                stage: 1,
+                money: 1000,
+                life: 8,
+                selectedUnit: null,
+                units: [],
+                enemies: [],
+                bullets: [],
+                waveActive: false,
+                enemySpawnTimer: 0,
+                enemiesSpawned: 0,
+                maxEnemies: 5,
+                gameStarted: false,
+                autoSpawn: false
+            };
+            document.getElementById('game-over-screen').style.display = 'none';
+            document.getElementById('start-screen').style.display = 'flex';
+            document.getElementById('game-container').classList.remove('active');
+            document.getElementById('mobile-ui').classList.remove('active');
+        }
+
+        function drawStageLayout() {
+            const scale = Math.min(canvas.width / 800, canvas.height / 600);
+            const offsetX = (canvas.width - 800 * scale) / 2;
+            const offsetY = (canvas.height - 600 * scale) / 2;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(offsetX, offsetY);
+            ctx.scale(scale, scale);
+            
+            // 背景（空）
+            const gradient = ctx.createLinearGradient(0, 0, 0, 600);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(1, '#E0F6FF');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 800, 600);
+            
+            // 床（フローリング）
+            ctx.fillStyle = '#DEB887';
+            ctx.fillRect(0, 350, 800, 250);
+            
+            // フローリングの線
+            ctx.strokeStyle = '#CD853F';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 800; i += 100) {
+                ctx.beginPath();
+                ctx.moveTo(i, 350);
+                ctx.lineTo(i, 600);
+                ctx.stroke();
+            }
+            
+            // 左の部屋（味方の家）
+            ctx.fillStyle = '#F0F8FF';
+            ctx.fillRect(20, 200, 120, 150);
+            ctx.strokeStyle = '#4682B4';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(20, 200, 120, 150);
+            
+            // 窓
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(30, 220, 30, 30);
+            ctx.fillRect(100, 220, 30, 30);
+            ctx.strokeStyle = '#4682B4';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(30, 220, 30, 30);
+            ctx.strokeRect(100, 220, 30, 30);
+            
+            // ドア
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(65, 280, 30, 70);
+            ctx.strokeStyle = '#654321';
+            ctx.strokeRect(65, 280, 30, 70);
+            
+            // ドアノブ
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(85, 315, 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 右の部屋（敵の家）
+            ctx.fillStyle = '#2F2F2F';
+            ctx.fillRect(660, 200, 120, 150);
+            ctx.strokeStyle = '#8B0000';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(660, 200, 120, 150);
+            
+            // 敵の窓（赤く光る）
+            ctx.fillStyle = '#FF4500';
+            ctx.fillRect(670, 220, 30, 30);
+            ctx.fillRect(740, 220, 30, 30);
+            ctx.strokeStyle = '#8B0000';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(670, 220, 30, 30);
+            ctx.strokeRect(740, 220, 30, 30);
+            
+            // 敵のドア
+            ctx.fillStyle = '#4B0000';
+            ctx.fillRect(705, 280, 30, 70);
+            ctx.strokeStyle = '#8B0000';
+            ctx.strokeRect(705, 280, 30, 70);
+            
+            // 戦闘エリアの境界線
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([15, 10]);
+            ctx.beginPath();
+            ctx.moveTo(150, 300);
+            ctx.lineTo(650, 300);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // 雲
+            drawCloud(200, 80, 40);
+            drawCloud(500, 60, 35);
+            drawCloud(650, 90, 45);
+            
+            ctx.restore();
+        }
+        
+        function drawCloud(x, y, size) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
+            ctx.arc(x + size * 0.3, y, size * 0.7, 0, Math.PI * 2);
+            ctx.arc(x + size * 0.6, y, size * 0.5, 0, Math.PI * 2);
+            ctx.arc(x - size * 0.3, y, size * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function setupEventListeners() {
+            const unitButtons = document.querySelectorAll('.unit-button, .unit-btn');
+            unitButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    unitButtons.forEach(b => b.classList.remove('selected'));
+                    button.classList.add('selected');
+                    gameState.selectedUnit = button.dataset.unit;
+                });
+            });
+
+            canvas.addEventListener('click', spawnUnit);
+            canvas.addEventListener('touchstart', spawnUnit);
+            
+            const autoButton1 = document.getElementById('auto-spawn-button');
+            const autoButton2 = document.getElementById('auto-btn');
+            if (autoButton1) autoButton1.addEventListener('click', toggleAutoSpawn);
+            if (autoButton2) autoButton2.addEventListener('click', toggleAutoSpawn);
+            
+            // 敵の自動スポーン開始
+            setTimeout(() => {
+                gameState.waveActive = true;
+            }, 2000);
+        }
+
+        function spawnUnit(e) {
+            e.preventDefault();
+            if (!gameState.selectedUnit) return;
+            
+            const unitType = unitTypes[gameState.selectedUnit];
+            if (gameState.money < unitType.cost) return;
+            
+            gameState.units.push({
+                x: 80,
+                y: 300,
+                type: gameState.selectedUnit,
+                ...unitType,
+                maxHealth: unitType.health,
+                lastFire: 0,
+                target: null
+            });
+            
+            gameState.money -= unitType.cost;
+            updateUI();
+        }
+        
+        function toggleAutoSpawn() {
+            gameState.autoSpawn = !gameState.autoSpawn;
+            const buttons = document.querySelectorAll('#auto-spawn-button, #auto-btn');
+            buttons.forEach(btn => {
+                btn.classList.toggle('active', gameState.autoSpawn);
+                btn.textContent = gameState.autoSpawn ? '自動出撃 ON' : '自動出撃 OFF';
+            });
+        }
+
+        function getRandomEnemyType() {
+            const types = Object.keys(enemyTypes);
+            const weights = gameState.stage < 3 ? [0.7, 0.3, 0] : 
+                          gameState.stage < 6 ? [0.5, 0.4, 0.1] : [0.3, 0.4, 0.3];
+            const rand = Math.random();
+            let sum = 0;
+            for (let i = 0; i < types.length; i++) {
+                sum += weights[i];
+                if (rand < sum) return types[i];
+            }
+            return types[0];
+        }
+
+        function spawnEnemy() {
+            const enemyType = getRandomEnemyType();
+            const enemy = enemyTypes[enemyType];
+            gameState.enemies.push({
+                x: 720,
+                y: 300,
+                type: enemyType,
+                health: enemy.health + gameState.stage * 20,
+                maxHealth: enemy.health + gameState.stage * 20,
+                speed: enemy.speed,
+                damage: enemy.damage,
+                color: enemy.color,
+                size: enemy.size,
+                lastAttack: 0
+            });
+            gameState.enemiesSpawned++;
+        }
+
+        function gameLoop() {
+            if (!gameState.gameStarted) return;
+            
+            // 敵のスポーン
+            if (gameState.waveActive) {
+                gameState.enemySpawnTimer++;
+                if (gameState.enemySpawnTimer >= 120) {
+                    spawnEnemy();
+                    gameState.enemySpawnTimer = 0;
+                }
+            }
+            
+            // 自動出撃
+            if (gameState.autoSpawn && gameState.selectedUnit) {
+                const unitType = unitTypes[gameState.selectedUnit];
+                if (gameState.money >= unitType.cost && Math.random() < 0.02) {
+                    spawnUnit({ preventDefault: () => {} });
+                }
+            }
+            
+            // ユニット移動と戦闘
+            gameState.units.forEach((unit, uIndex) => {
+                const nearestEnemy = gameState.enemies.find(enemy => 
+                    Math.abs(enemy.x - unit.x) < unit.range && Math.abs(enemy.y - unit.y) < 50
+                );
+                
+                if (nearestEnemy) {
+                    unit.lastFire++;
+                    if (unit.lastFire >= unit.fireRate) {
+                        nearestEnemy.health -= unit.damage;
+                        unit.lastFire = 0;
+                        if (nearestEnemy.health <= 0) {
+                            gameState.enemies = gameState.enemies.filter(e => e !== nearestEnemy);
+                            gameState.money += 50;
+                        }
+                    }
+                } else {
+                    unit.x += unit.speed;
+                    if (unit.x > 720) {
+                        gameState.units.splice(uIndex, 1);
+                    }
+                }
+            });
+            
+            // 敵移動と戦闘
+            gameState.enemies.forEach((enemy, eIndex) => {
+                const nearestUnit = gameState.units.find(unit => 
+                    Math.abs(unit.x - enemy.x) < 50 && Math.abs(unit.y - enemy.y) < 50
+                );
+                
+                if (nearestUnit) {
+                    enemy.lastAttack++;
+                    if (enemy.lastAttack >= 60) {
+                        nearestUnit.health -= enemy.damage;
+                        enemy.lastAttack = 0;
+                        if (nearestUnit.health <= 0) {
+                            gameState.units = gameState.units.filter(u => u !== nearestUnit);
+                        }
+                    }
+                } else {
+                    enemy.x -= enemy.speed;
+                    if (enemy.x < 80) {
+                        gameState.life--;
+                        gameState.enemies.splice(eIndex, 1);
+                        if (gameState.life <= 0) {
+                            gameOver();
+                            return;
+                        }
+                    }
+                }
+            });
+            
+            // お金の自動増加
+            if (Math.random() < 0.01) {
+                gameState.money += 10;
+            }
+            
+            // ステージアップ
+            if (gameState.enemiesSpawned >= gameState.maxEnemies * gameState.stage && gameState.enemies.length === 0) {
+                gameState.stage++;
+                gameState.money += 200;
+                gameState.maxEnemies = Math.min(10, 5 + gameState.stage);
+                gameState.enemiesSpawned = 0;
+            }
+
+            updateUI();
+            redraw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function redraw() {
+            drawStageLayout();
+            
+            const scale = Math.min(canvas.width / 800, canvas.height / 600);
+            const offsetX = (canvas.width - 800 * scale) / 2;
+            const offsetY = (canvas.height - 600 * scale) / 2;
+            
+            ctx.save();
+            ctx.translate(offsetX, offsetY);
+            ctx.scale(scale, scale);
+            
+            // ユニット描画
+            gameState.units.forEach(unit => {
+                drawUnit(unit.x, unit.y, unit.type, unit.size);
+                
+                // HP バー
+                ctx.fillStyle = '#FF4444';
+                ctx.fillRect(unit.x - 15, unit.y - 25, 30, 4);
+                ctx.fillStyle = '#44FF44';
+                ctx.fillRect(unit.x - 15, unit.y - 25, (unit.health / unit.maxHealth) * 30, 4);
+                
+                // HP バーの枠
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(unit.x - 15, unit.y - 25, 30, 4);
+            });
+
+            // 敵描画
+            gameState.enemies.forEach(enemy => {
+                drawEnemy(enemy.x, enemy.y, enemy.type, enemy.size);
+                
+                // HP バー
+                ctx.fillStyle = '#FF4444';
+                ctx.fillRect(enemy.x - 15, enemy.y - 25, 30, 4);
+                ctx.fillStyle = '#44FF44';
+                ctx.fillRect(enemy.x - 15, enemy.y - 25, (enemy.health / enemy.maxHealth) * 30, 4);
+                
+                // HP バーの枠
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(enemy.x - 15, enemy.y - 25, 30, 4);
+            });
+        }
+        
+        function drawUnit(x, y, type, size) {
+            ctx.save();
+            ctx.translate(x, y);
+            
+            if (type === 'cat') {
+                // ねこ
+                ctx.fillStyle = '#FFB6C1';
+                ctx.beginPath();
+                ctx.arc(0, 0, size/2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#FF69B4';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // 耳
+                ctx.fillStyle = '#FF69B4';
+                ctx.beginPath();
+                ctx.moveTo(-8, -8);
+                ctx.lineTo(-4, -15);
+                ctx.lineTo(0, -8);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(0, -8);
+                ctx.lineTo(4, -15);
+                ctx.lineTo(8, -8);
+                ctx.fill();
+                
+                // 目
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(-4, -2, 2, 0, Math.PI * 2);
+                ctx.arc(4, -2, 2, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (type === 'dog') {
+                // いぬ
+                ctx.fillStyle = '#DEB887';
+                ctx.beginPath();
+                ctx.arc(0, 0, size/2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#CD853F';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // 耳
+                ctx.fillStyle = '#CD853F';
+                ctx.beginPath();
+                ctx.ellipse(-6, -5, 4, 8, -0.3, 0, Math.PI * 2);
+                ctx.ellipse(6, -5, 4, 8, 0.3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 目
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(-4, -2, 2, 0, Math.PI * 2);
+                ctx.arc(4, -2, 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 鼻
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(0, 2, 1, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (type === 'robot') {
+                // ロボ
+                ctx.fillStyle = '#C0C0C0';
+                ctx.fillRect(-size/2, -size/2, size, size);
+                ctx.strokeStyle = '#808080';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(-size/2, -size/2, size, size);
+                
+                // 目（LED）
+                ctx.fillStyle = '#FF0000';
+                ctx.beginPath();
+                ctx.arc(-4, -4, 2, 0, Math.PI * 2);
+                ctx.arc(4, -4, 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 口（LED）
+                ctx.fillStyle = '#00FF00';
+                ctx.fillRect(-6, 2, 12, 2);
+                
+                // アンテナ
+                ctx.strokeStyle = '#808080';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, -size/2);
+                ctx.lineTo(0, -size/2 - 5);
+                ctx.stroke();
+                ctx.fillStyle = '#FF0000';
+                ctx.beginPath();
+                ctx.arc(0, -size/2 - 5, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+        }
+        
+        function drawEnemy(x, y, type, size) {
+            ctx.save();
+            ctx.translate(x, y);
+            
+            if (type === 'mouse') {
+                // ねずみ
+                ctx.fillStyle = '#8B4513';
+                ctx.beginPath();
+                ctx.arc(0, 0, size/2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // 耳
+                ctx.fillStyle = '#654321';
+                ctx.beginPath();
+                ctx.arc(-6, -6, 4, 0, Math.PI * 2);
+                ctx.arc(6, -6, 4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // しっぽ
+                ctx.strokeStyle = '#8B4513';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(size/2, 0, 8, Math.PI, 0);
+                ctx.stroke();
+            } else if (type === 'rat') {
+                // ラット
+                ctx.fillStyle = '#696969';
+                ctx.beginPath();
+                ctx.arc(0, 0, size/2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#2F2F2F';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // 牙
+                ctx.fillStyle = '#FFF';
+                ctx.beginPath();
+                ctx.moveTo(-3, 4);
+                ctx.lineTo(-1, 8);
+                ctx.lineTo(1, 4);
+                ctx.moveTo(1, 4);
+                ctx.lineTo(3, 8);
+                ctx.lineTo(5, 4);
+                ctx.fill();
+            } else if (type === 'monster') {
+                // モンスター
+                ctx.fillStyle = '#800080';
+                ctx.beginPath();
+                ctx.arc(0, 0, size/2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#4B0082';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                // 角
+                ctx.fillStyle = '#4B0082';
+                ctx.beginPath();
+                ctx.moveTo(-6, -size/2);
+                ctx.lineTo(-3, -size/2 - 8);
+                ctx.lineTo(0, -size/2);
+                ctx.moveTo(0, -size/2);
+                ctx.lineTo(3, -size/2 - 8);
+                ctx.lineTo(6, -size/2);
+                ctx.fill();
+                
+                // 赤い目
+                ctx.fillStyle = '#FF0000';
+                ctx.beginPath();
+                ctx.arc(-4, -2, 3, 0, Math.PI * 2);
+                ctx.arc(4, -2, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+            
+            ctx.restore();
+        }
+
+        function updateUI() {
+            const elements = {
+                stage: [document.getElementById('stage-number'), document.getElementById('stage-mobile')],
+                money: [document.getElementById('money-count'), document.getElementById('money-mobile')],
+                life: [document.getElementById('life-count'), document.getElementById('life-mobile')]
+            };
+            
+            elements.stage.forEach(el => el && (el.textContent = gameState.stage));
+            elements.money.forEach(el => el && (el.textContent = gameState.money));
+            elements.life.forEach(el => el && (el.textContent = gameState.life));
+            
+            document.querySelectorAll('.unit-button, .unit-btn').forEach(button => {
+                const cost = parseInt(button.dataset.cost);
+                button.disabled = gameState.money < cost;
+            });
+        }
+
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('retry-btn').addEventListener('click', resetGame);
+        window.addEventListener('resize', resizeCanvas);
+        
+        resizeCanvas();
+    </script>
+</body>
+</html>

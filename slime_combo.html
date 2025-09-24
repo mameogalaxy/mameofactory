@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <title>合わせわざ - スライムミニゲーム</title>
+    <style>
+      :root {
+        --bg: #1e1b33;
+        --panel: #26223a;
+        --text: #f1f1f8;
+        --accent: #6be4ff;
+        --red: #ff6b6b;
+        --blue: #6bbcff;
+        --yellow: #ffd36b;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: sans-serif;
+        background: linear-gradient(180deg, #151223 0%, #221d38 100%);
+        color: var(--text);
+        -webkit-tap-highlight-color: transparent;
+      }
+      #app {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #game {
+        width: min(900px, 96vw);
+        height: min(700px, 92vh);
+        background: radial-gradient(circle, #2a2640 0%, #181423 70%);
+        border-radius: 16px;
+        padding: 18px;
+        box-sizing: border-box;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: 16px;
+      }
+      .panel {
+        background: linear-gradient(180deg, var(--panel), #141124);
+        border-radius: 12px;
+        padding: 12px;
+        box-sizing: border-box;
+      }
+      #left {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .stat {
+        font-size: 18px;
+      }
+      #sequence {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .slot {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.03);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px dashed rgba(255, 255, 255, 0.03);
+      }
+      .orb {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+      }
+      #playarea {
+        position: relative;
+        background: linear-gradient(180deg, #0f0d19 0%, #191627 100%);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      #player {
+        position: absolute;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+      }
+      #orbs {
+        position: absolute;
+        inset: 0;
+      }
+      #hud {
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      button {
+        background: var(--accent);
+        color: #002;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      #message {
+        position: absolute;
+        left: 50%;
+        top: 12px;
+        transform: translateX(-50%);
+        font-weight: 700;
+        color: var(--accent);
+        text-shadow: 0 0 8px rgba(107, 228, 255, 0.4);
+      }
+      .small {
+        font-size: 13px;
+        color: #cfcfe0;
+      }
+      @media (max-width: 600px) {
+        #game {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="game">
+        <div id="left" class="panel">
+          <div id="hud">
+            <div>
+              <div class="stat">SCORE: <span id="score">0</span></div>
+              <div class="small">LIFE: <span id="lives">3</span></div>
+            </div>
+            <div>
+              <button id="restart">Restart</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="small">次の合わせわざシーケンス</div>
+            <div id="sequence" style="margin-top: 8px"></div>
+          </div>
+
+          <div style="margin-top: 12px">
+            <div class="small">操作</div>
+            <div class="small">
+              矢印/WASD: 移動 / 画面タップ・ドラッグでもOK
+            </div>
+          </div>
+
+          <div style="margin-top: 12px">
+            <div class="small">ルール</div>
+            <div class="small">
+              表示された順にオーブを集めると「合わせわざ」発動でボーナス
+            </div>
+          </div>
+        </div>
+
+        <div id="playarea" class="panel">
+          <div id="message">合わせわざを揃えよう！</div>
+          <div id="orbs"></div>
+          <div id="player"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <script>
+      // --- 簡易ゲーム: 合わせわざ ---
+      const COLORS = [
+        { name: "RED", color: "#ff6b6b" },
+        { name: "BLUE", color: "#6bbcff" },
+        { name: "YELLOW", color: "#ffd36b" },
+      ];
+
+      const dom = {
+        playarea: document.getElementById("playarea"),
+        player: document.getElementById("player"),
+        orbs: document.getElementById("orbs"),
+        sequence: document.getElementById("sequence"),
+        score: document.getElementById("score"),
+        lives: document.getElementById("lives"),
+        restart: document.getElementById("restart"),
+        message: document.getElementById("message"),
+      };
+
+      let state = {
+        score: 0,
+        lives: 3,
+        seq: [],
+        seqPos: 0,
+        orbsList: [],
+        isPointerDown: false,
+        pointer: { x: 0, y: 0 },
+        keys: {},
+      };
+
+      // サウンド
+      let audioReady = false;
+      const SND = {};
+      async function initAudio() {
+        if (audioReady) return;
+        await Tone.start();
+        SND.ok = new Tone.Synth().toDestination();
+        SND.bad = new Tone.MembraneSynth().toDestination();
+        audioReady = true;
+      }
+
+      function randChoice(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+      }
+
+      // シーケンス生成
+      function newSequence(len = 3) {
+        state.seq = [];
+        for (let i = 0; i < len; i++) state.seq.push(randChoice(COLORS));
+        state.seqPos = 0;
+        renderSequence();
+      }
+
+      function renderSequence() {
+        dom.sequence.innerHTML = "";
+        state.seq.forEach((c, idx) => {
+          const s = document.createElement("div");
+          s.className = "slot";
+          s.title = idx + 1;
+          const orb = document.createElement("div");
+          orb.className = "orb";
+          orb.style.background = c.color;
+          if (idx < state.seqPos) orb.style.filter = "grayscale(100%)";
+          s.appendChild(orb);
+          dom.sequence.appendChild(s);
+        });
+      }
+
+      // オーブ生成
+      function spawnOrb(colorObj) {
+        const el = document.createElement("div");
+        el.className = "orb";
+        el.style.background = colorObj.color;
+        el.style.position = "absolute";
+        const w = dom.playarea.clientWidth,
+          h = dom.playarea.clientHeight;
+        const x = Math.random() * (w - 60) + 30;
+        const y = Math.random() * (h - 60) + 30;
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        el.dataset.color = colorObj.name;
+        dom.orbs.appendChild(el);
+        state.orbsList.push(el);
+        gsap.fromTo(el, { scale: 0 }, { scale: 1, duration: 0.2 });
+      }
+
+      function spawnRandomOrbs(count = 6) {
+        for (let i = 0; i < count; i++) spawnOrb(randChoice(COLORS));
+      }
+
+      // プレイヤー初期
+      function resetPlayer() {
+        const w = dom.playarea.clientWidth,
+          h = dom.playarea.clientHeight;
+        gsap.set(dom.player, {
+          width: 48,
+          height: 48,
+          left: w / 2 - 24,
+          top: h - 80,
+          background: "#9ef",
+        });
+        dom.player.style.border = "4px solid rgba(255,255,255,0.06)";
+      }
+
+      // 衝突判定
+      function rect(el) {
+        return el.getBoundingClientRect();
+      }
+      function isColl(a, b) {
+        return (
+          a.left < b.right &&
+          a.right > b.left &&
+          a.top < b.bottom &&
+          a.bottom > b.top
+        );
+      }
+
+      function checkPickups() {
+        const pRect = rect(dom.player);
+        for (let i = state.orbsList.length - 1; i >= 0; i--) {
+          const o = state.orbsList[i];
+          if (!o) continue;
+          if (isColl(pRect, rect(o))) {
+            const colorName = o.dataset.color;
+            handlePickup(colorName, o);
+            dom.orbs.removeChild(o);
+            state.orbsList.splice(i, 1);
+          }
+        }
+      }
+
+      function handlePickup(colorName, el) {
+        const need = state.seq[state.seqPos].name;
+        if (colorName === need) {
+          // correct
+          state.seqPos++;
+          state.score += 10;
+          if (audioReady) SND.ok.triggerAttackRelease("C5", "8n");
+          renderSequence();
+          dom.message.textContent = "ナイス！";
+          if (state.seqPos >= state.seq.length) {
+            triggerCombo();
+          }
+        } else {
+          state.lives--;
+          state.score = Math.max(0, state.score - 5);
+          if (audioReady) SND.bad.triggerAttackRelease("C2", "8n");
+          dom.message.textContent = "ちがう！";
+          updateHUD();
+          if (state.lives <= 0) gameOver();
+        }
+        updateHUD();
+        setTimeout(
+          () => (dom.message.textContent = "合わせわざを揃えよう！"),
+          700
+        );
+      }
+
+      function triggerCombo() {
+        // コンボ発動
+        state.score += 50;
+        dom.message.textContent = "合わせわざ発動！"; // エフェクト: 画面内のオーブを弾く
+        state.orbsList.forEach((o) => {
+          gsap.to(o, {
+            x: `+=${(Math.random() - 0.5) * 300}`,
+            y: `+=${(Math.random() - 0.5) * 300}`,
+            rotation: Math.random() * 360,
+            duration: 0.8,
+            opacity: 0,
+            onComplete: () => {
+              if (o.parentNode) o.parentNode.removeChild(o);
+            },
+          });
+        });
+        state.orbsList = [];
+        updateHUD();
+        newSequence(3); // 次のシーケンス
+      }
+
+      function updateHUD() {
+        dom.score.textContent = state.score;
+        dom.lives.textContent = state.lives;
+      }
+
+      function gameOver() {
+        dom.message.textContent = "ゲームオーバー"; // 簡易停止
+        // clear orbs
+        state.orbsList.forEach((o) => o.remove());
+        state.orbsList = [];
+      }
+
+      // 入力
+      function setupInput() {
+        let dragging = false;
+        window.addEventListener("keydown", (e) => {
+          if (e.key === "ArrowLeft" || e.key === "a") state.keys.left = true;
+          if (e.key === "ArrowRight" || e.key === "d") state.keys.right = true;
+          if (e.key === "ArrowUp" || e.key === "w") state.keys.up = true;
+          if (e.key === "ArrowDown" || e.key === "s") state.keys.down = true;
+        });
+        window.addEventListener("keyup", (e) => {
+          if (e.key === "ArrowLeft" || e.key === "a") state.keys.left = false;
+          if (e.key === "ArrowRight" || e.key === "d") state.keys.right = false;
+          if (e.key === "ArrowUp" || e.key === "w") state.keys.up = false;
+          if (e.key === "ArrowDown" || e.key === "s") state.keys.down = false;
+        });
+        dom.playarea.addEventListener("pointerdown", (e) => {
+          state.isPointerDown = true;
+          state.pointer.x = e.clientX;
+          state.pointer.y = e.clientY;
+        });
+        window.addEventListener("pointermove", (e) => {
+          if (state.isPointerDown) {
+            state.pointer.x = e.clientX;
+            state.pointer.y = e.clientY;
+          }
+        });
+        window.addEventListener("pointerup", () => {
+          state.isPointerDown = false;
+        });
+      }
+
+      // ループ
+      function loop() {
+        // 移動
+        const step = 6;
+        let x = gsap.getProperty(dom.player, "left") || 0;
+        let y = gsap.getProperty(dom.player, "top") || 0;
+        if (state.keys.left) x -= step;
+        if (state.keys.right) x += step;
+        if (state.keys.up) y -= step;
+        if (state.keys.down) y += step;
+        if (state.isPointerDown) {
+          // pointer moves player toward pointer
+          const pr = dom.playarea.getBoundingClientRect();
+          const px = state.pointer.x - pr.left;
+          const py = state.pointer.y - pr.top;
+          const cx = x + 24;
+          const cy = y + 24;
+          const dx = px - cx,
+            dy = py - cy;
+          const d = Math.sqrt(dx * dx + dy * dy) || 1;
+          x += (dx / d) * 4;
+          y += (dy / d) * 4;
+        }
+        // clamp
+        const bounds = dom.playarea.getBoundingClientRect();
+        x = Math.max(6, Math.min(bounds.width - 54, x));
+        y = Math.max(6, Math.min(bounds.height - 54, y));
+        gsap.set(dom.player, { left: x, top: y });
+        checkPickups();
+        requestAnimationFrame(loop);
+      }
+
+      dom.restart.addEventListener("click", () => {
+        state.score = 0;
+        state.lives = 3;
+        updateHUD();
+        newSequence(3);
+        dom.orbs.innerHTML = "";
+        state.orbsList = [];
+        spawnRandomOrbs(6);
+        resetPlayer();
+      });
+
+      // 初期化
+      (async function () {
+        await initAudio();
+        newSequence(3);
+        spawnRandomOrbs(6);
+        resetPlayer();
+        setupInput();
+        updateHUD();
+        loop();
+      })();
+    </script>
+  </body>
+</html>

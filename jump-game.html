@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ジャンプ踏みつけゲーム</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 20px;
+        background: #222;
+        color: #fff;
+        font-family: Arial;
+        text-align: center;
+      }
+      canvas {
+        border: 2px solid #fff;
+        background: linear-gradient(to bottom, #87ceeb, #98fb98);
+      }
+      #info {
+        font-size: 20px;
+        margin: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ジャンプ踏みつけゲーム</h1>
+    <div id="info">
+      スコア: <span id="score">0</span> | コンボ: <span id="combo">0</span> |
+      最高コンボ: <span id="maxCombo">0</span>
+    </div>
+    <canvas id="game" width="800" height="600"></canvas>
+    <p>スペース: ジャンプ | 矢印キー: 移動 | 敵を踏みつけてコンボを狙え！</p>
+
+    <script>
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+
+      let score = 0;
+      let combo = 0;
+      let maxCombo = 0;
+
+      // プレイヤー
+      const player = {
+        x: 100,
+        y: 450,
+        width: 40,
+        height: 40,
+        vx: 0,
+        vy: 0,
+        speed: 5,
+        jumpPower: 15,
+        onGround: false,
+        canDoubleJump: false,
+      };
+
+      // 敵
+      const enemies = [];
+
+      // 重力
+      const gravity = 0.8;
+      const groundY = 500;
+
+      // キー入力
+      const keys = {};
+
+      document.addEventListener("keydown", (e) => {
+        keys[e.code] = true;
+        if (e.code === "Space") {
+          e.preventDefault();
+          if (player.onGround) {
+            player.vy = -player.jumpPower;
+            player.onGround = false;
+            player.canDoubleJump = true;
+          } else if (player.canDoubleJump) {
+            player.vy = -player.jumpPower * 0.8;
+            player.canDoubleJump = false;
+          }
+        }
+      });
+
+      document.addEventListener("keyup", (e) => {
+        keys[e.code] = false;
+      });
+
+      // 敵生成
+      function spawnEnemy() {
+        enemies.push({
+          x: canvas.width + 50,
+          y: groundY - 30,
+          width: 30,
+          height: 30,
+          speed: 2 + Math.random() * 3,
+          color: `hsl(${Math.random() * 360}, 70%, 50%)`,
+          stomped: false,
+        });
+      }
+
+      // 衝突判定
+      function collision(rect1, rect2) {
+        return (
+          rect1.x < rect2.x + rect2.width &&
+          rect1.x + rect1.width > rect2.x &&
+          rect1.y < rect2.y + rect2.height &&
+          rect1.y + rect1.height > rect2.y
+        );
+      }
+
+      // 踏みつけ判定
+      function isStomping(player, enemy) {
+        return (
+          player.vy > 0 &&
+          player.y + player.height - 10 < enemy.y &&
+          collision(player, enemy)
+        );
+      }
+
+      // 更新
+      function update() {
+        // プレイヤー移動
+        if (keys["ArrowLeft"]) player.vx = -player.speed;
+        else if (keys["ArrowRight"]) player.vx = player.speed;
+        else player.vx *= 0.8;
+
+        // 重力適用
+        player.vy += gravity;
+
+        // プレイヤー位置更新
+        player.x += player.vx;
+        player.y += player.vy;
+
+        // 画面端制限
+        if (player.x < 0) player.x = 0;
+        if (player.x > canvas.width - player.width)
+          player.x = canvas.width - player.width;
+
+        // 地面判定
+        if (player.y + player.height >= groundY) {
+          player.y = groundY - player.height;
+          player.vy = 0;
+          player.onGround = true;
+          player.canDoubleJump = false;
+        }
+
+        // 敵更新
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          const enemy = enemies[i];
+          enemy.x -= enemy.speed;
+
+          // 画面外の敵を削除
+          if (enemy.x + enemy.width < 0) {
+            enemies.splice(i, 1);
+            combo = 0; // コンボリセット
+            document.getElementById("combo").textContent = combo;
+            continue;
+          }
+
+          // 踏みつけ判定
+          if (!enemy.stomped && isStomping(player, enemy)) {
+            enemy.stomped = true;
+            player.vy = -player.jumpPower * 0.7; // 踏みつけ後のジャンプ
+            combo++;
+            score += 100 * combo; // コンボボーナス
+
+            if (combo > maxCombo) {
+              maxCombo = combo;
+              document.getElementById("maxCombo").textContent = maxCombo;
+            }
+
+            document.getElementById("score").textContent = score;
+            document.getElementById("combo").textContent = combo;
+
+            // 踏みつけた敵を削除
+            enemies.splice(i, 1);
+          } else if (!enemy.stomped && collision(player, enemy)) {
+            // 横から当たった場合はゲームオーバー
+            alert(
+              `ゲームオーバー！\nスコア: ${score}\n最高コンボ: ${maxCombo}`
+            );
+            resetGame();
+            return;
+          }
+        }
+
+        // 敵生成
+        if (Math.random() < 0.02) {
+          spawnEnemy();
+        }
+      }
+
+      // ゲームリセット
+      function resetGame() {
+        score = 0;
+        combo = 0;
+        player.x = 100;
+        player.y = 450;
+        player.vx = 0;
+        player.vy = 0;
+        player.onGround = false;
+        enemies.length = 0;
+        document.getElementById("score").textContent = score;
+        document.getElementById("combo").textContent = combo;
+      }
+
+      // 描画
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 地面描画
+        ctx.fillStyle = "#4a4a4a";
+        ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+
+        // プレイヤー描画
+        ctx.fillStyle = "#00ff00";
+        ctx.fillRect(player.x, player.y, player.width, player.height);
+
+        // 目を描画
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(player.x + 8, player.y + 8, 8, 8);
+        ctx.fillRect(player.x + 24, player.y + 8, 8, 8);
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(player.x + 10, player.y + 10, 4, 4);
+        ctx.fillRect(player.x + 26, player.y + 10, 4, 4);
+
+        // 敵描画
+        enemies.forEach((enemy) => {
+          if (!enemy.stomped) {
+            ctx.fillStyle = enemy.color;
+            ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+
+            // 敵の目
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(enemy.x + 5, enemy.y + 5, 6, 6);
+            ctx.fillRect(enemy.x + 19, enemy.y + 5, 6, 6);
+            ctx.fillStyle = "#ff0000";
+            ctx.fillRect(enemy.x + 7, enemy.y + 7, 2, 2);
+            ctx.fillRect(enemy.x + 21, enemy.y + 7, 2, 2);
+          }
+        });
+
+        // コンボ表示
+        if (combo > 1) {
+          ctx.fillStyle = "#ffff00";
+          ctx.font = "bold 32px Arial";
+          ctx.textAlign = "center";
+          ctx.fillText(`${combo} COMBO!`, canvas.width / 2, 100);
+        }
+      }
+
+      // ゲームループ
+      function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+      }
+
+      gameLoop();
+    </script>
+  </body>
+</html>
