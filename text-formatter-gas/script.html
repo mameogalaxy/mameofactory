@@ -1,0 +1,1258 @@
+<script>
+let video,canvas,ctx;
+let detector=null,score=0,currentStage=1,totalSquats=0,dailyTotal=0;
+let headState='above',belowSince=0,noseHistory=[],maxDepthY=0;
+let isTransitioning=false;
+let lastDate=new Date().toDateString();
+let faceDetected=false;
+let playerLevel=1,playerExp=0;
+let lastTreasureCheck=0;
+
+function getExpForLevel(level){
+  return Math.floor(10*Math.pow(1.5,level-1));
+}
+
+function addExp(amount){
+  playerExp+=amount;
+  let leveledUp=false;
+  
+  while(playerExp>=getExpForLevel(playerLevel)&&playerLevel<100){
+    playerExp-=getExpForLevel(playerLevel);
+    playerLevel++;
+    leveledUp=true;
+    if(playerLevel>=100){
+      playerLevel=100;
+      playerExp=0;
+      break;
+    }
+  }
+  
+  if(leveledUp){
+    showLevelUp();
+  }
+  updateExpUI();
+  localStorage.setItem('playerLevel',playerLevel);
+  localStorage.setItem('playerExp',playerExp);
+}
+
+function updateExpUI(){
+  const needed=getExpForLevel(playerLevel);
+  const percent=Math.min((playerExp/needed)*100,100);
+  const remaining=Math.max(needed-playerExp,0);
+  document.getElementById('expFill').style.width=percent+'%';
+  if(playerLevel>=100){
+    document.getElementById('expText').textContent='MAX LEVEL';
+  }else{
+    document.getElementById('expText').textContent='あと'+remaining+'EXP';
+  }
+  document.getElementById('levelInfo').textContent='Lv.'+playerLevel;
+}
+
+function showLevelUp(){
+  const levelUpEl=document.getElementById('levelUpEffect');
+  if(!levelUpEl){
+    const el=document.createElement('div');
+    el.id='levelUpEffect';
+    el.style.position='fixed';
+    el.style.bottom='100px';
+    el.style.left='20px';
+    el.style.width='120px';
+    el.style.textAlign='center';
+    el.style.fontSize='2rem';
+    el.style.fontWeight='900';
+    el.style.fontFamily='Impact,sans-serif';
+    el.style.color='#FFD700';
+    el.style.textShadow='0 0 20px #FFD700,0 0 40px #FFA500,3px 3px 0 #000,-3px -3px 0 #000,3px -3px 0 #000,-3px 3px 0 #000';
+    el.style.zIndex='102';
+    el.style.opacity='0';
+    el.style.transform='scale(0.5)';
+    el.style.transition='all 0.3s';
+    el.style.animation='sparkle 1.5s ease-in-out';
+    el.textContent='LV UP!';
+    document.body.appendChild(el);
+    const style=document.createElement('style');
+    style.textContent='@keyframes sparkle{0%,100%{opacity:0;transform:scale(0.5)}20%{opacity:1;transform:scale(1.3)}50%{opacity:1;transform:scale(1)}80%{opacity:1;transform:scale(1.1)}}';
+    document.head.appendChild(style);
+  }
+  const el=document.getElementById('levelUpEffect');
+  el.style.animation='none';
+  setTimeout(()=>{
+    el.style.animation='sparkle 1.5s ease-in-out';
+  },10);
+  setTimeout(()=>{
+    el.style.opacity='0';
+    el.style.transform='scale(0.5)';
+  },1500);
+}
+
+const enemyNames=["パンプキンナイト","ゴーストメイジ","森の番人","ダーク・ジャック","魔王パンプキング","ネオ・パンプキン","シャドウビースト","フレイムドラゴン","アイスゴーレム","サンダーウルフ"];
+const targetColors=["#ff4757","#ffb347","#69ffb4","#4757ff","#ff47ff","#ff0000","#8b00ff","#ff6b35","#00d4ff","#ffd700"];
+let enemySequence=[];
+
+function getNextEnemy(){
+  if(enemySequence.length===0){
+    enemySequence=[...Array(enemyNames.length).keys()];
+    for(let i=enemySequence.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      [enemySequence[i],enemySequence[j]]=[enemySequence[j],enemySequence[i]];
+    }
+  }
+  return enemySequence.shift();
+}
+
+let currentEnemyIndex=0;
+
+function getStageGoal(s){return 5+(s-1)*2}
+
+function startGame(){
+  if(!video||!canvas||!ctx){
+    video=document.getElementById('video');
+    canvas=document.getElementById('overlay');
+    ctx=canvas.getContext('2d');
+  }
+  document.getElementById('startScreen').style.display='none';
+  drawActiveMonster();
+  setupCameraAndModel();
+}
+
+async function setupCameraAndModel(){
+  const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  
+  try{
+    const constraints={
+      video:{
+        facingMode:"user",
+        width:{ideal:isMobile?480:640},
+        height:{ideal:isMobile?640:480}
+      }
+    };
+    const stream=await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject=stream;
+    await video.play();
+  }catch(e){
+    showMessage('カメラ起動失敗');
+    const canvas=document.getElementById('overlay');
+    const ctx=canvas.getContext('2d');
+    if(ctx)ctx.clearRect(0,0,canvas.width,canvas.height);
+    return;
+  }
+  
+  function resizeCanvas(){
+    canvas.width=window.innerWidth;
+    canvas.height=window.innerHeight;
+  }
+  
+  video.onloadedmetadata=()=>{
+    resizeCanvas();
+  };
+  
+  window.addEventListener('resize',resizeCanvas);
+  window.addEventListener('orientationchange',()=>{
+    setTimeout(resizeCanvas,100);
+  });
+  resizeCanvas();
+  
+  detector=await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet,{modelType:poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING});
+  isLooping=true;
+  loop();
+}
+
+function updateUI(){
+  const today=new Date().toDateString();
+  const savedDate=localStorage.getItem('lastDate');
+  if(today!==savedDate){
+    dailyTotal=0;
+    lastDate=today;
+    localStorage.setItem('dailyTotal',0);
+    localStorage.setItem('lastDate',today);
+  }
+  const goal=getStageGoal(currentStage);
+  const remaining=Math.max(0,goal-score);
+  const hpPercent=(remaining/goal)*100;
+  const nameIdx=currentEnemyIndex;
+  const colorIdx=currentEnemyIndex;
+  
+  document.getElementById('targetHpFill').style.width=hpPercent+'%';
+  document.getElementById('targetHpFill').style.background=`linear-gradient(to right,${targetColors[colorIdx]},${targetColors[(colorIdx+1)%targetColors.length]})`;
+  document.getElementById('stageInfo').textContent=`ステージ ${currentStage}`;
+  document.getElementById('targetHpText').textContent=`HP ${remaining}/${goal}`;
+  document.getElementById('targetName').textContent=enemyNames[nameIdx];
+  const currentCountEl=document.getElementById('currentCount');
+  const todayCountEl=document.getElementById('todayCount');
+  const totalCountEl=document.getElementById('totalCount');
+  const todayCountDisplay=document.getElementById('todayCountDisplay');
+  const totalCountDisplay=document.getElementById('totalCountDisplay');
+  if(currentCountEl)currentCountEl.textContent=totalSquats;
+  if(todayCountEl)todayCountEl.textContent=dailyTotal;
+  const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+  if(todayCountDisplay)todayCountDisplay.style.display='block';
+  if(isLoggedIn&&totalCountEl&&totalCountDisplay){
+    const baseTotal=parseInt(localStorage.getItem('totalCount')||'0');
+    totalCountEl.textContent=baseTotal;
+    totalCountDisplay.style.display='block';
+  }else if(totalCountDisplay){
+    totalCountDisplay.style.display='none';
+  }
+  updateTreasureProgress();
+}
+
+function applyDamageEffect(d){
+  const effectEl=document.getElementById('effect');
+  effectEl.textContent='-'+d;
+  effectEl.style.color='';
+  effectEl.style.fontFamily='';
+  effectEl.style.fontSize='';
+  effectEl.style.textShadow='';
+  effectEl.style.opacity=1;
+  setTimeout(()=>{effectEl.style.opacity=0},800);
+  
+  const gc=document.getElementById('gameContainer');
+  gc.classList.remove('shake-1','shake-2','shake-3');
+  gc.classList.add(d===1?'shake-1':d===2?'shake-2':'shake-3');
+  setTimeout(()=>gc.classList.remove('shake-1','shake-2','shake-3'),200);
+}
+
+function handleStageClear(){
+  isTransitioning=true;
+  document.getElementById('flashEffect').style.opacity=1;
+  setTimeout(()=>document.getElementById('flashEffect').style.opacity=0,100);
+  
+  const effectEl=document.getElementById('effect');
+  effectEl.textContent='敵を倒した！';
+  effectEl.style.opacity=1;
+  
+  const ec=document.getElementById('enemyContainer');
+  ec.style.opacity=0;
+  ec.style.transform='translateX(-50%) scale(0.1) rotate(360deg)';
+  
+  setTimeout(()=>{
+    effectEl.style.opacity=0;
+    checkTreasureDrop();
+  },1500);
+  
+  setTimeout(()=>{
+    currentStage++;
+    score=0;
+    currentEnemyIndex=getNextEnemy();
+    ec.style.opacity=1;
+    ec.style.transform='translateX(-50%) scale(1) rotate(0deg)';
+    updateUI();
+    isTransitioning=false;
+  },2000);
+}
+
+let isLooping=false;
+async function loop(){
+  if(!detector||!isLooping)return;
+  
+  const poses=await detector.estimatePoses(video);
+  
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  
+  const isMobile=window.innerWidth<=768;
+  const lineY1=canvas.height*(isMobile?0.65:0.6);
+  const lineY2=canvas.height*(isMobile?0.75:0.7);
+  const lineY3=canvas.height*(isMobile?0.85:0.8);
+  
+  if(poses&&poses.length>0){
+    const nose=poses[0].keypoints.find(p=>p.name==='nose');
+    if(nose&&nose.score>0.3){
+      faceDetected=true;
+    }
+  }
+  
+  if(faceDetected){
+    ctx.lineWidth=4;
+    ctx.setLineDash([15,10]);
+    ctx.strokeStyle='rgba(255,255,255,0.8)';
+    ctx.beginPath();
+    ctx.moveTo(0,lineY1);
+    ctx.lineTo(canvas.width,lineY1);
+    ctx.stroke();
+    
+    ctx.setLineDash([]);
+    ctx.strokeStyle='rgba(255,255,0,0.8)';
+    ctx.beginPath();
+    ctx.moveTo(0,lineY2);
+    ctx.lineTo(canvas.width,lineY2);
+    ctx.stroke();
+    
+    ctx.strokeStyle='rgba(255,0,0,0.8)';
+    ctx.beginPath();
+    ctx.moveTo(0,lineY3);
+    ctx.lineTo(canvas.width,lineY3);
+    ctx.stroke();
+  }
+  
+  if(poses&&poses.length>0){
+    const nose=poses[0].keypoints.find(p=>p.name==='nose');
+    if(nose&&nose.score>0.3){
+      const videoRect=video.getBoundingClientRect();
+      const noseY=(nose.y/video.videoHeight)*canvas.height;
+      
+      noseHistory.push(noseY);
+      if(noseHistory.length>6)noseHistory.shift();
+      const avgY=noseHistory.reduce((a,b)=>a+b,0)/noseHistory.length;
+      
+      if(avgY>lineY1&&headState==='above'){
+        headState='below';
+        belowSince=Date.now();
+        maxDepthY=avgY;
+      }
+      
+      if(headState==='below'){
+        maxDepthY=Math.max(maxDepthY,avgY);
+      }
+      
+      if(avgY<lineY1&&headState==='below'){
+        if(Date.now()-belowSince>=250&&!isTransitioning&&isCameraOn){
+          let baseDmg=0;
+          if(maxDepthY>=lineY3)baseDmg=3;
+          else if(maxDepthY>=lineY2)baseDmg=2;
+          else if(maxDepthY>=lineY1)baseDmg=1;
+          
+          if(baseDmg>0){
+            const dmg=baseDmg+playerLevel-1;
+            const goal=getStageGoal(currentStage);
+            const remaining=goal-score;
+            const actualDmg=Math.min(dmg,remaining);
+            
+            score+=actualDmg;
+            totalSquats++;
+            dailyTotal++;
+            localStorage.setItem('dailyTotal',dailyTotal);
+            applyDamageEffect(actualDmg);
+            updateUI();
+            
+            const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+            if(isLoggedIn&&totalSquats%5===0){
+              saveUserProgress();
+            }
+            
+            if(score>=goal){
+              setTimeout(()=>{
+                handleStageClear();
+                addExp(currentStage*5);
+              },800);
+            }
+          }
+        }
+        headState='above';
+        noseHistory=[];
+        maxDepthY=0;
+      }
+    }
+  }
+  
+  requestAnimationFrame(loop);
+}
+
+function restartGame(sameStage){
+  isTransitioning=false;
+  if(!sameStage){
+    currentStage=1;
+  }
+  score=0;
+  totalSquats=0;
+  const ec=document.getElementById('enemyContainer');
+  ec.style.opacity=1;
+  ec.style.transform='translateX(-50%)';
+  updateUI();
+  updateExpUI();
+}
+
+function showGameOver(){
+  document.getElementById('finalStage').textContent=currentStage;
+  document.getElementById('finalSquats').textContent=totalSquats;
+  document.getElementById('gameOverModal').style.display='flex';
+}
+
+function closeModal(){
+  document.getElementById('gameOverModal').style.display='none';
+}
+
+let isSaving=false;
+function saveScoreToSheet(){
+  if(isSaving)return;
+  const name=document.getElementById('playerName').value.trim();
+  if(!name){
+    showMessage('プレイヤー名を入力してください');
+    return;
+  }
+  isSaving=true;
+  google.script.run
+    .withSuccessHandler(r=>{
+      showMessage(r.message);
+      setTimeout(()=>backToTitle(),1500);
+      isSaving=false;
+    })
+    .withFailureHandler(e=>{showMessage('保存失敗: '+e);isSaving=false;})
+    .saveScore(name,currentStage,totalSquats);
+}
+
+function showMessage(msg){
+  const effectEl=document.getElementById('effect');
+  effectEl.textContent=msg;
+  effectEl.style.color='#fff';
+  effectEl.style.fontFamily='"Arial Black",Impact,sans-serif';
+  effectEl.style.fontSize='clamp(1.5rem,6vw,2.5rem)';
+  effectEl.style.textShadow='3px 3px 0 #000,-3px -3px 0 #000,3px -3px 0 #000,-3px 3px 0 #000,0 0 20px rgba(255,255,255,0.8)';
+  effectEl.style.opacity=1;
+  setTimeout(()=>effectEl.style.opacity=0,2000);
+}
+
+function showConfirm(msg,onConfirm){
+  const modal=document.createElement('div');
+  modal.style.position='fixed';
+  modal.style.inset='0';
+  modal.style.background='rgba(0,0,0,0.8)';
+  modal.style.zIndex='10000';
+  modal.style.display='flex';
+  modal.style.alignItems='center';
+  modal.style.justifyContent='center';
+  const box=document.createElement('div');
+  box.style.background='linear-gradient(135deg,#1e3a8a,#06b6d4)';
+  box.style.padding='30px';
+  box.style.borderRadius='20px';
+  box.style.textAlign='center';
+  box.style.maxWidth='90%';
+  box.innerHTML='<p style="color:#fff;font-size:1.2rem;margin:0 0 20px 0;white-space:pre-wrap">'+msg+'</p>';
+  const btnYes=document.createElement('button');
+  btnYes.textContent='OK';
+  btnYes.style.padding='12px 30px';
+  btnYes.style.fontSize='1.1rem';
+  btnYes.style.background='#4CAF50';
+  btnYes.style.color='#fff';
+  btnYes.style.border='none';
+  btnYes.style.borderRadius='8px';
+  btnYes.style.cursor='pointer';
+  btnYes.style.margin='5px';
+  btnYes.onclick=function(){
+    document.body.removeChild(modal);
+    onConfirm();
+  };
+  const btnNo=document.createElement('button');
+  btnNo.textContent='キャンセル';
+  btnNo.style.padding='12px 30px';
+  btnNo.style.fontSize='1.1rem';
+  btnNo.style.background='#999';
+  btnNo.style.color='#fff';
+  btnNo.style.border='none';
+  btnNo.style.borderRadius='8px';
+  btnNo.style.cursor='pointer';
+  btnNo.style.margin='5px';
+  btnNo.onclick=function(){
+    document.body.removeChild(modal);
+  };
+  box.appendChild(btnYes);
+  box.appendChild(btnNo);
+  modal.appendChild(box);
+  document.body.appendChild(modal);
+}
+
+function showStartScreen(){
+const startScreen=document.getElementById('startScreen');
+const loginButton=document.getElementById('loginButton');
+const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+if(loginButton){
+loginButton.style.display=isLoggedIn?'none':'block';
+}
+startScreen.style.display='flex';
+}
+
+function backToTitle(){
+  const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+  if(isLoggedIn){
+    saveUserProgress();
+  }
+  restartGame(false);
+  document.getElementById('gameOverModal').style.display='none';
+  
+  const saveBtn=document.getElementById('saveBtn');
+  const logoutBtn=document.getElementById('logoutBtn');
+  if(saveBtn)saveBtn.style.display=isLoggedIn?'block':'none';
+  if(logoutBtn)logoutBtn.style.display=isLoggedIn?'block':'none';
+  
+  showStartScreen();
+  loadRankingData();
+}
+
+function logout(){
+  const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+  if(!isLoggedIn){
+    showMessage('ゲストモードです');
+    return;
+  }
+  showConfirm('ログアウトしますか？\nデータは保存されます。',function(){
+    saveUserProgress();
+    localStorage.clear();
+    document.getElementById('startScreen').style.display='none';
+    document.getElementById('gameContainer').style.display='none';
+    if(isLooping){
+      isLooping=false;
+      const stream=video.srcObject;
+      if(stream){
+        stream.getTracks().forEach(track=>track.stop());
+        video.srcObject=null;
+      }
+    }
+    showLoginScreen();
+  });
+}
+function loadRankingData(){
+const tbody=document.getElementById('rankingTable');
+if(!tbody)return;
+const SHEET_ID='180zH4Ba5OTXMCN5abNQQsICWACn6IKTNQ0q8Wo8jmuc';
+const SHEET_NAME='スコア';
+const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json&sheet='+SHEET_NAME;
+fetch(url).then(function(r){return r.text();}).then(function(text){
+const json=JSON.parse(text.substr(47).slice(0,-2));
+const rows=json.table.rows;
+if(rows.length<=1){tbody.innerHTML='<tr><td colspan="4" style="padding:20px;text-align:center">データがありません</td></tr>';return;}
+const scores=rows.slice(1).map(function(r){return{name:r.c[1]?r.c[1].v:'',stage:r.c[3]?r.c[3].v:0,squats:r.c[4]?r.c[4].v:0};}).filter(function(s){return s.name;});
+scores.sort(function(a,b){return b.stage-a.stage||b.squats-a.squats;});
+let html='';
+scores.slice(0,10).forEach(function(item,i){
+const rank=i+1;
+let color='#333';
+if(rank===1)color='#FFD700';
+else if(rank===2)color='#C0C0C0';
+else if(rank===3)color='#CD7F32';
+html+='<tr style="border-bottom:1px solid #eee"><td style="padding:10px;text-align:center;font-weight:bold;color:'+color+'">'+rank+'</td><td style="padding:10px;text-align:center">'+item.name+'</td><td style="padding:10px;text-align:center"><strong>'+item.stage+'</strong></td><td style="padding:10px;text-align:center">'+item.squats+'</td></tr>';
+});
+tbody.innerHTML=html;
+}).catch(function(){tbody.innerHTML='<tr><td colspan="4" style="padding:20px;text-align:center">読み込みエラー</td></tr>';});
+}
+window.addEventListener('DOMContentLoaded',function(){
+  video=document.getElementById('video');
+  canvas=document.getElementById('overlay');
+  ctx=canvas.getContext('2d');
+  
+  const loginStatus=localStorage.getItem('isLoggedIn');
+  if(loginStatus===null||loginStatus===undefined||loginStatus==='false'){
+    showLoginScreen();
+    return;
+  }
+  const isLoggedIn=loginStatus==='true';
+  
+  const username=localStorage.getItem('username')||'ゲスト';
+  const userDisplay=document.getElementById('userDisplay');
+  if(userDisplay&&isLoggedIn)userDisplay.textContent=username;
+  
+  const savedDaily=localStorage.getItem('dailyTotal');
+  const savedDate=localStorage.getItem('lastDate');
+  const today=new Date().toDateString();
+  if(savedDate===today&&savedDaily){
+    dailyTotal=parseInt(savedDaily);
+  }else{
+    dailyTotal=0;
+    localStorage.setItem('dailyTotal',0);
+    localStorage.setItem('lastDate',today);
+  }
+  lastDate=today;
+  
+  currentEnemyIndex=getNextEnemy();
+  
+  if(isLoggedIn){
+    const savedLevel=localStorage.getItem('playerLevel');
+    const savedExp=localStorage.getItem('playerExp');
+    if(savedLevel)playerLevel=parseInt(savedLevel);
+    if(savedExp)playerExp=parseInt(savedExp);
+  }else{
+    playerLevel=1;
+    playerExp=0;
+  }
+  updateExpUI();
+  
+  const saveBtn=document.getElementById('saveBtn');
+  const logoutBtn=document.getElementById('logoutBtn');
+  if(saveBtn)saveBtn.style.display=isLoggedIn?'block':'none';
+  if(logoutBtn)logoutBtn.style.display=isLoggedIn?'block':'none';
+  
+  showStartScreen();
+  let ownedMonsters=JSON.parse(localStorage.getItem('ownedMonsters')||'[{"id":"slime","level":1,"exp":0}]');
+  if(ownedMonsters.length===0||!ownedMonsters.find(m=>m.id==='slime')){
+    ownedMonsters=[{id:'slime',level:1,exp:0}];
+    localStorage.setItem('ownedMonsters',JSON.stringify(ownedMonsters));
+  }
+  if(!localStorage.getItem('activeMonster')){
+    localStorage.setItem('activeMonster','slime');
+  }
+  updateUI();
+  updateExpUI();
+  drawActiveMonster();
+  drawTreasureBoxIcon();
+});
+
+function drawTreasureBox(ctx,x,y,size){
+  ctx.fillStyle='#8B4513';
+  ctx.fillRect(x-size/2,y-size/2,size,size*0.8);
+  ctx.fillStyle='#FFD700';
+  ctx.fillRect(x-size/2,y-size/2,size,size*0.2);
+  ctx.fillRect(x-size*0.1,y-size/2,size*0.2,size*0.8);
+  ctx.fillStyle='#FF0000';
+  ctx.beginPath();
+  ctx.arc(x,y-size/2,size*0.15,0,Math.PI*2);
+  ctx.fill();
+}
+
+function drawTreasureBoxIcon(){
+  const canvas=document.getElementById('treasureBoxCanvas');
+  if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  drawTreasureBox(ctx,40,40,40);
+}
+
+function drawItemIcon(ctx,type,x,y,size){
+  if(type==='rare'){
+    ctx.fillStyle='#FFD700';
+    ctx.beginPath();
+    ctx.arc(x,y,size,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle='#FF4500';
+    ctx.beginPath();
+    ctx.arc(x-size*0.3,y-size*0.2,size*0.2,0,Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x+size*0.3,y-size*0.2,size*0.2,0,Math.PI*2);
+    ctx.fill();
+  }else if(type==='normal'){
+    ctx.fillStyle='#4CAF50';
+    ctx.beginPath();
+    ctx.arc(x,y,size,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle='#000';
+    ctx.beginPath();
+    ctx.arc(x-size*0.3,y-size*0.2,size*0.15,0,Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x+size*0.3,y-size*0.2,size*0.15,0,Math.PI*2);
+    ctx.fill();
+  }else{
+    ctx.fillStyle='#666';
+    ctx.beginPath();
+    ctx.arc(x,y,size,0,Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle='#fff';
+    ctx.lineWidth=size*0.2;
+    ctx.beginPath();
+    ctx.moveTo(x-size*0.5,y-size*0.5);
+    ctx.lineTo(x+size*0.5,y+size*0.5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x+size*0.5,y-size*0.5);
+    ctx.lineTo(x-size*0.5,y+size*0.5);
+    ctx.stroke();
+  }
+}
+
+function drawMonster(ctx,monsterId,x,y,size){
+  ctx.save();
+  ctx.translate(x,y);
+  if(monsterId==='slime'){
+    ctx.beginPath();
+    ctx.ellipse(0,size*0.3,size,size*0.8,0,0,Math.PI*2);
+    ctx.fillStyle='#4CAF50';
+    ctx.fill();
+    ctx.strokeStyle='#2E7D32';
+    ctx.lineWidth=2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(-size*0.3,-size*0.2,size*0.25,0,Math.PI*2);
+    ctx.fillStyle='#fff';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(-size*0.25,-size*0.2,size*0.12,0,Math.PI*2);
+    ctx.fillStyle='#000';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(size*0.3,-size*0.2,size*0.25,0,Math.PI*2);
+    ctx.fillStyle='#fff';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(size*0.35,-size*0.2,size*0.12,0,Math.PI*2);
+    ctx.fillStyle='#000';
+    ctx.fill();
+  }else if(monsterId==='goblin'){
+    ctx.fillStyle='#8B4513';
+    ctx.beginPath();
+    ctx.arc(0,0,size,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle='#654321';
+    ctx.beginPath();
+    ctx.moveTo(-size*0.5,-size*0.3);
+    ctx.lineTo(-size*0.3,-size*0.8);
+    ctx.lineTo(-size*0.1,-size*0.3);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(size*0.5,-size*0.3);
+    ctx.lineTo(size*0.3,-size*0.8);
+    ctx.lineTo(size*0.1,-size*0.3);
+    ctx.fill();
+    ctx.fillStyle='#FF0000';
+    ctx.beginPath();
+    ctx.arc(-size*0.3,-size*0.1,size*0.15,0,Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(size*0.3,-size*0.1,size*0.15,0,Math.PI*2);
+    ctx.fill();
+  }else if(monsterId==='dragon'){
+    ctx.fillStyle='#FF4500';
+    ctx.beginPath();
+    ctx.ellipse(0,0,size*1.2,size,0,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle='#FFD700';
+    ctx.beginPath();
+    ctx.arc(-size*0.4,-size*0.3,size*0.2,0,Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(size*0.4,-size*0.3,size*0.2,0,Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle='#8B0000';
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(-size*0.6,size*0.3);
+    ctx.lineTo(-size*0.8,size*0.8);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(size*0.6,size*0.3);
+    ctx.lineTo(size*0.8,size*0.8);
+    ctx.stroke();
+  }else if(monsterId==='phoenix'){
+    ctx.fillStyle='#FFD700';
+    ctx.beginPath();
+    ctx.arc(0,0,size,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle='#FF4500';
+    for(let i=0;i<5;i++){
+      ctx.save();
+      ctx.rotate((Math.PI*2/5)*i);
+      ctx.beginPath();
+      ctx.moveTo(0,-size);
+      ctx.lineTo(-size*0.3,-size*1.3);
+      ctx.lineTo(size*0.3,-size*1.3);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle='#FFA500';
+    ctx.beginPath();
+    ctx.arc(-size*0.3,-size*0.2,size*0.2,0,Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(size*0.3,-size*0.2,size*0.2,0,Math.PI*2);
+    ctx.fill();
+  }else if(monsterId==='panking'){
+    const monsterInfo=monsterTypes.find(m=>m.id==='panking');
+    if(monsterInfo&&monsterInfo.image){
+      const img=new Image();
+      img.src=monsterInfo.image;
+      if(img.complete){
+        ctx.drawImage(img,-size*1.5,-size*1.5,size*3,size*3);
+      }else{
+        img.onload=()=>ctx.drawImage(img,-size*1.5,-size*1.5,size*3,size*3);
+      }
+    }
+  }else if(monsterId==='wolf'){
+    ctx.fillStyle='#696969';
+    ctx.beginPath();
+    ctx.ellipse(0,0,size*1.1,size*0.9,0,0,Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-size*0.6,-size*0.7);
+    ctx.lineTo(-size*0.4,-size*1.2);
+    ctx.lineTo(-size*0.2,-size*0.7);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(size*0.6,-size*0.7);
+    ctx.lineTo(size*0.4,-size*1.2);
+    ctx.lineTo(size*0.2,-size*0.7);
+    ctx.fill();
+    ctx.fillStyle='#FFD700';
+    ctx.beginPath();
+    ctx.arc(-size*0.3,-size*0.2,size*0.15,0,Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(size*0.3,-size*0.2,size*0.15,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle='#000';
+    ctx.beginPath();
+    ctx.moveTo(0,size*0.2);
+    ctx.lineTo(-size*0.2,size*0.5);
+    ctx.lineTo(size*0.2,size*0.5);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+let activeMonsterCanvas=null;
+function drawActiveMonster(){
+  const container=document.getElementById('myCharacter');
+  if(!container)return;
+  if(activeMonsterCanvas){
+    container.removeChild(activeMonsterCanvas);
+  }
+  const canvas=document.createElement('canvas');
+  canvas.width=120;
+  canvas.height=120;
+  activeMonsterCanvas=canvas;
+  container.appendChild(canvas);
+  const ctx=canvas.getContext('2d');
+  const activeMonster=localStorage.getItem('activeMonster')||'slime';
+  
+  const monsterNameEl=document.getElementById('myMonsterName');
+  if(monsterNameEl){
+    const monsterInfo=monsterTypes.find(m=>m.id===activeMonster);
+    monsterNameEl.textContent=monsterInfo?monsterInfo.name:'スライム';
+  }
+  
+  function animate(){
+    const time=Date.now()*0.002;
+    const bounce=Math.sin(time*2)*5;
+    ctx.clearRect(0,0,120,120);
+    ctx.save();
+    ctx.translate(60,60+bounce);
+    drawMonster(ctx,activeMonster,0,0,35);
+    ctx.restore();
+    requestAnimationFrame(animate);
+  }
+  animate();
+}
+
+function updateTreasureProgress(){}
+
+function checkTreasureDrop(){
+  const dropRate=Math.min(10+currentStage*2,90);
+  const rand=Math.random()*100;
+  if(rand<dropRate){
+    const dropText=document.getElementById('treasureDropText');
+    if(dropText){
+      dropText.style.opacity=1;
+      setTimeout(()=>dropText.style.opacity=0,2000);
+    }
+    let treasureCount=parseInt(localStorage.getItem('treasureCount')||'0');
+    treasureCount++;
+    localStorage.setItem('treasureCount',treasureCount);
+  }
+}
+
+function openItems(){
+  const treasureCount=parseInt(localStorage.getItem('treasureCount')||'0');
+  document.getElementById('treasureCountModal').textContent=treasureCount;
+  document.getElementById('itemModal').style.display='flex';
+  document.getElementById('gachaModal').style.display='none';
+}
+
+function closeItemModal(){
+  document.getElementById('itemModal').style.display='none';
+  setTimeout(function(){
+    if(!isLooping&&detector&&isCameraOn){
+      isLooping=true;
+      loop();
+    }
+  },100);
+}
+
+const monsterTypes=[
+  {id:'slime',name:'スライム',color:'#4CAF50',rarity:'normal'},
+  {id:'goblin',name:'ゴブリン',color:'#8B4513',rarity:'normal'},
+  {id:'panking',name:'パンキング',color:'#FF8C00',rarity:'normal',image:'https://raw.githubusercontent.com/mameogalaxy/mameofactory/main/images/panking.png'},
+  {id:'wolf',name:'ウルフ',color:'#696969',rarity:'normal'},
+  {id:'dragon',name:'ドラゴン',color:'#FF4500',rarity:'rare'},
+  {id:'phoenix',name:'フェニックス',color:'#FFD700',rarity:'rare'}
+];
+const items=[{icon:'rare',name:'レアモンスター',rate:0.1,color:'#FFD700'},{icon:'normal',name:'モンスター',rate:0.2,color:'#C0C0C0'},{icon:'miss',name:'はずれ',rate:0.7,color:'#999'}];
+
+function openTreasureBox(){
+  let treasureCount=parseInt(localStorage.getItem('treasureCount')||'0');
+  if(treasureCount<=0){
+    document.getElementById('resultText').textContent='宝箱がありません';
+    document.getElementById('gachaModal').style.display='flex';
+    document.getElementById('resultIcon').style.display='none';
+    document.getElementById('rouletteContainer').style.display='none';
+    document.getElementById('gachaButtons').style.display='block';
+    return;
+  }
+  treasureCount--;
+  localStorage.setItem('treasureCount',treasureCount);
+  document.getElementById('treasureCountModal').textContent=treasureCount;
+  document.getElementById('gachaModal').style.display='flex';
+  document.getElementById('resultIcon').style.display='none';
+  document.getElementById('resultIcon').innerHTML='';
+  document.getElementById('gachaButtons').style.display='none';
+  document.getElementById('resultText').textContent='ルーレット回転中...';
+  document.getElementById('rouletteContainer').style.display='block';
+  const roulette=document.getElementById('roulette');
+  roulette.innerHTML='';
+  roulette.style.display='flex';
+  roulette.style.transition='none';
+  roulette.style.transform='translateX(0px)';
+  const itemWidth=100;
+  const itemsArray=[];
+  for(let i=0;i<30;i++){
+    itemsArray.push(items[i%items.length]);
+  }
+  itemsArray.forEach((item,i)=>{
+    const div=document.createElement('div');
+    div.style.minWidth=itemWidth+'px';
+    div.style.height='100%';
+    div.style.display='flex';
+    div.style.alignItems='center';
+    div.style.justifyContent='center';
+    div.style.background=item.color;
+    div.style.borderRight='2px solid #fff';
+    const canvas=document.createElement('canvas');
+    canvas.width=80;
+    canvas.height=80;
+    const ctx=canvas.getContext('2d');
+    drawItemIcon(ctx,item.icon,40,40,30);
+    div.appendChild(canvas);
+    roulette.appendChild(div);
+  });
+  const rand=Math.random();
+  let result=items[items.length-1];
+  let cumulative=0;
+  for(let i=0;i<items.length;i++){
+    cumulative+=items[i].rate;
+    if(rand<cumulative){
+      result=items[i];
+      break;
+    }
+  }
+  const resultIndex=items.indexOf(result)+15;
+  const containerWidth=roulette.parentElement.offsetWidth;
+  const targetX=-(resultIndex*itemWidth)+(containerWidth/2)-(itemWidth/2);
+  const spinDuration=3000;
+  const startTime=Date.now();
+  const startX=containerWidth;
+  function spin(){
+    const elapsed=Date.now()-startTime;
+    const progress=Math.min(elapsed/spinDuration,1);
+    const easeOut=1-Math.pow(1-progress,3);
+    const currentX=startX+(targetX-startX)*easeOut;
+    roulette.style.transform='translateX('+currentX+'px)';
+    if(progress<1){
+      requestAnimationFrame(spin);
+    }else{
+      showGachaResult(result);
+    }
+  }
+  spin();
+}
+
+function showGachaResult(result){
+  setTimeout(function(){
+    document.getElementById('rouletteContainer').style.display='none';
+    const resultIcon=document.getElementById('resultIcon');
+    resultIcon.innerHTML='';
+    const canvas=document.createElement('canvas');
+    canvas.width=100;
+    canvas.height=100;
+    const ctx=canvas.getContext('2d');
+    drawItemIcon(ctx,result.icon,50,50,40);
+    resultIcon.appendChild(canvas);
+    resultIcon.style.display='block';
+    if(result.name==='はずれ'){
+      document.getElementById('resultText').textContent='はずれ...';
+    }else{
+      let monster;
+      if(result.icon==='rare'){
+        const rareMonsters=monsterTypes.filter(m=>m.rarity==='rare');
+        monster=rareMonsters[Math.floor(Math.random()*rareMonsters.length)];
+      }else{
+        const normalMonsters=monsterTypes.filter(m=>m.rarity==='normal');
+        monster=normalMonsters[Math.floor(Math.random()*normalMonsters.length)];
+      }
+      let ownedMonsters=JSON.parse(localStorage.getItem('ownedMonsters')||'[{"id":"slime","level":1,"exp":0}]');
+      const isNew=!ownedMonsters.find(m=>m.id===monster.id);
+      if(isNew){
+        ownedMonsters.push({id:monster.id,level:1,exp:0});
+        localStorage.setItem('ownedMonsters',JSON.stringify(ownedMonsters));
+        document.getElementById('resultText').textContent=monster.name+'獲得！';
+      }else{
+        document.getElementById('resultText').textContent=monster.name+'獲得！（持ってます）';
+      }
+    }
+    document.getElementById('gachaButtons').style.display='block';
+  },500);
+}
+
+function openTreasureBoxAll(){
+  let treasureCount=parseInt(localStorage.getItem('treasureCount')||'0');
+  if(treasureCount<=0){
+    document.getElementById('resultText').textContent='宝箱がありません';
+    document.getElementById('gachaModal').style.display='flex';
+    document.getElementById('resultIcon').style.display='none';
+    document.getElementById('roulette').style.display='none';
+    document.getElementById('gachaButtons').style.display='block';
+    return;
+  }
+  const pullCount=treasureCount;
+  treasureCount=0;
+  localStorage.setItem('treasureCount',treasureCount);
+  document.getElementById('treasureCountModal').textContent=treasureCount;
+  
+  let ownedMonsters=JSON.parse(localStorage.getItem('ownedMonsters')||'[{"id":"slime","level":1,"exp":0}]');
+  let newMonsters=[];
+  let missCount=0;
+  
+  for(let i=0;i<pullCount;i++){
+    const rand=Math.random();
+    let result=items[items.length-1];
+    let cumulative=0;
+    for(let j=0;j<items.length;j++){
+      cumulative+=items[j].rate;
+      if(rand<cumulative){
+        result=items[j];
+        break;
+      }
+    }
+    if(result.name==='はずれ'){
+      missCount++;
+    }else{
+      let monster;
+      if(result.icon==='rare'){
+        const rareMonsters=monsterTypes.filter(m=>m.rarity==='rare');
+        monster=rareMonsters[Math.floor(Math.random()*rareMonsters.length)];
+      }else{
+        const normalMonsters=monsterTypes.filter(m=>m.rarity==='normal');
+        monster=normalMonsters[Math.floor(Math.random()*normalMonsters.length)];
+      }
+      const isNew=!ownedMonsters.find(m=>m.id===monster.id);
+      if(isNew){
+        ownedMonsters.push({id:monster.id,level:1,exp:0});
+        newMonsters.push({monster:monster,isNew:true});
+      }else{
+        newMonsters.push({monster:monster,isNew:false});
+      }
+    }
+  }
+  localStorage.setItem('ownedMonsters',JSON.stringify(ownedMonsters));
+  
+  document.getElementById('itemModal').style.display='none';
+  document.getElementById('gachaModal').style.display='flex';
+  document.getElementById('resultIcon').style.display='none';
+  document.getElementById('gachaButtons').style.display='none';
+  document.getElementById('rouletteContainer').style.display='none';
+  
+  const resultDiv=document.createElement('div');
+  resultDiv.style.maxHeight='300px';
+  resultDiv.style.overflowY='auto';
+  resultDiv.style.display='grid';
+  resultDiv.style.gridTemplateColumns='repeat(auto-fill,minmax(80px,1fr))';
+  resultDiv.style.gap='10px';
+  resultDiv.style.padding='10px';
+  
+  newMonsters.forEach(item=>{
+    const div=document.createElement('div');
+    div.style.background=item.isNew?'linear-gradient(135deg,#FFD700,#FFA500)':'#f0f0f0';
+    div.style.borderRadius='10px';
+    div.style.padding='10px';
+    div.style.textAlign='center';
+    div.style.border=item.isNew?'3px solid #FF4500':'2px solid #ccc';
+    const canvas=document.createElement('canvas');
+    canvas.width=60;
+    canvas.height=60;
+    const ctx=canvas.getContext('2d');
+    drawMonster(ctx,item.monster.id,30,30,25);
+    div.appendChild(canvas);
+    const name=document.createElement('div');
+    name.textContent=item.monster.name;
+    name.style.fontSize='0.7rem';
+    name.style.fontWeight='bold';
+    name.style.color='#333';
+    name.style.marginTop='5px';
+    div.appendChild(name);
+    if(item.isNew){
+      const badge=document.createElement('div');
+      badge.textContent='NEW!';
+      badge.style.fontSize='0.6rem';
+      badge.style.color='#FF0000';
+      badge.style.fontWeight='bold';
+      div.appendChild(badge);
+    }
+    resultDiv.appendChild(div);
+  });
+  
+  let summaryText='🎉 '+pullCount+'回ガチャ結果🎉<br>';
+  summaryText+='モンスター: '+(pullCount-missCount)+'体 / はずれ: '+missCount+'回<br>';
+  const newCount=newMonsters.filter(m=>m.isNew).length;
+  if(newCount>0)summaryText+='✨NEW: '+newCount+'体✨';
+  
+  document.getElementById('resultText').innerHTML=summaryText;
+  const resultIcon=document.getElementById('resultIcon');
+  resultIcon.innerHTML='';
+  resultIcon.appendChild(resultDiv);
+  resultIcon.style.display='block';
+  document.getElementById('gachaButtons').style.display='block';
+}
+
+function closeGachaModal(){
+  document.getElementById('gachaModal').style.display='none';
+  setTimeout(function(){
+    if(!isLooping&&detector&&isCameraOn){
+      isLooping=true;
+      loop();
+    }
+  },100);
+}
+
+function openMonsters(){
+  const ownedMonsters=JSON.parse(localStorage.getItem('ownedMonsters')||'[{"id":"slime","level":1,"exp":0}]');
+  const activeMonster=localStorage.getItem('activeMonster')||'slime';
+  const activeMonsterData=ownedMonsters.find(m=>m.id===activeMonster);
+  if(activeMonsterData){
+    activeMonsterData.level=playerLevel;
+    activeMonsterData.exp=playerExp;
+    localStorage.setItem('ownedMonsters',JSON.stringify(ownedMonsters));
+  }
+  const grid=document.getElementById('monsterGrid');
+  grid.innerHTML='';
+  monsterTypes.forEach(monster=>{
+    const div=document.createElement('div');
+    const isOwned=ownedMonsters.some(m=>m.id===monster.id);
+    const isActive=monster.id===activeMonster;
+    div.style.background='#fff';
+    div.style.borderRadius='15px';
+    div.style.padding='15px';
+    div.style.textAlign='center';
+    div.style.border='3px solid '+(isActive?'#00FF00':monster.rarity==='rare'?'#FFD700':'#999');
+    div.style.minHeight='100px';
+    div.style.display='flex';
+    div.style.flexDirection='column';
+    div.style.alignItems='center';
+    div.style.justifyContent='center';
+    div.style.cursor=isOwned?'pointer':'default';
+    div.style.transition='transform 0.2s';
+    if(isOwned){
+      div.onmouseover=()=>div.style.transform='scale(1.05)';
+      div.onmouseout=()=>div.style.transform='scale(1)';
+      div.onclick=()=>{
+        if(isActive){
+          showMessage('すでに使用中です');
+          return;
+        }
+        const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+        const confirmMsg=isLoggedIn?monster.name+'に入れ替えますか？\nレベルは引き継がれます。':monster.name+'に入れ替えますか？\nレベルはリセットされます。';
+        showConfirm(confirmMsg,function(){
+          const ownedMonsters=JSON.parse(localStorage.getItem('ownedMonsters')||'[{"id":"slime","level":1,"exp":0}]');
+          const currentActiveMonster=ownedMonsters.find(m=>m.id===activeMonster);
+          if(currentActiveMonster&&isLoggedIn){
+            currentActiveMonster.level=playerLevel;
+            currentActiveMonster.exp=playerExp;
+          }
+          
+          localStorage.setItem('activeMonster',monster.id);
+          
+          const newActiveMonster=ownedMonsters.find(m=>m.id===monster.id);
+          if(isLoggedIn){
+            if(newActiveMonster){
+              playerLevel=newActiveMonster.level||1;
+              playerExp=newActiveMonster.exp||0;
+            }else{
+              ownedMonsters.push({id:monster.id,level:1,exp:0});
+              playerLevel=1;
+              playerExp=0;
+            }
+            localStorage.setItem('ownedMonsters',JSON.stringify(ownedMonsters));
+          }else{
+            playerLevel=1;
+            playerExp=0;
+          }
+          
+          localStorage.setItem('playerLevel',playerLevel);
+          localStorage.setItem('playerExp',playerExp);
+          updateExpUI();
+          drawActiveMonster();
+          closeMonsterModal();
+          saveUserProgress();
+        });
+      };
+      const canvas=document.createElement('canvas');
+      canvas.width=60;
+      canvas.height=60;
+      const ctx=canvas.getContext('2d');
+      drawMonster(ctx,monster.id,30,30,25);
+      div.appendChild(canvas);
+      const name=document.createElement('div');
+      name.textContent=monster.name;
+      name.style.color='#333';
+      name.style.fontWeight='bold';
+      name.style.fontSize='0.9rem';
+      name.style.padding='4px 8px';
+      name.style.borderRadius='6px';
+      name.style.marginTop='5px';
+      name.style.whiteSpace='nowrap';
+      div.appendChild(name);
+      
+      const monsterData=ownedMonsters.find(m=>m.id===monster.id);
+      if(monsterData){
+        const levelText=document.createElement('div');
+        levelText.textContent='Lv.'+(isActive?playerLevel:monsterData.level||1);
+        levelText.style.color='#000';
+        levelText.style.fontSize='0.8rem';
+        levelText.style.fontWeight='bold';
+        levelText.style.marginTop='3px';
+        div.appendChild(levelText);
+      }
+      
+      if(isActive){
+        const badge=document.createElement('div');
+        badge.textContent='使用中';
+        badge.style.color='#00FF00';
+        badge.style.fontSize='0.7rem';
+        badge.style.fontWeight='bold';
+        badge.style.marginTop='3px';
+        div.appendChild(badge);
+      }
+    }else{
+      const lock=document.createElement('div');
+      lock.textContent='🔒';
+      lock.style.fontSize='2rem';
+      div.appendChild(lock);
+    }
+    grid.appendChild(div);
+  });
+  document.getElementById('monsterModal').style.display='flex';
+}
+
+function closeMonsterModal(){
+  document.getElementById('monsterModal').style.display='none';
+  setTimeout(function(){
+    if(!isLooping&&detector&&isCameraOn){
+      isLooping=true;
+      loop();
+    }
+  },100);
+}
+
+let isCameraOn=true;
+function toggleCamera(){
+  const video=document.getElementById('video');
+  const overlay=document.getElementById('overlay');
+  const btn=document.getElementById('cameraToggle');
+  if(!btn)return;
+  if(isCameraOn){
+    isLooping=false;
+    const stream=video.srcObject;
+    if(stream){
+      stream.getTracks().forEach(track=>track.stop());
+      video.srcObject=null;
+    }
+    video.style.display='none';
+    overlay.style.display='none';
+    const ctx=overlay.getContext('2d');
+    if(ctx)ctx.clearRect(0,0,overlay.width,overlay.height);
+    isCameraOn=false;
+    btn.textContent='カメラON';
+    btn.style.background='#4CAF50';
+  }else{
+    isCameraOn=true;
+    btn.textContent='カメラOFF';
+    btn.style.background='#ff4757';
+    video.style.display='block';
+    overlay.style.display='block';
+    faceDetected=false;
+    setupCameraAndModel();
+  }
+}
+</script>
