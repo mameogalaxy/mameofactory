@@ -1,0 +1,13 @@
+{
+  "name": "text-formatter-gas-debug",
+  "version": "1.0.0",
+  "description": "AI筋トレRPG デバッグツール",
+  "main": "debug-capture.js",
+  "scripts": {
+    "debug": "node debug-capture.js",
+    "ai-news": "node ai-news-annotated.js"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
+  }
+}

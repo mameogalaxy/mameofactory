@@ -1,0 +1,277 @@
+<div id="loadingOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;justify-content:center;align-items:center;flex-direction:column">
+<div style="width:50px;height:50px;border:5px solid #fff;border-top:5px solid #06b6d4;border-radius:50%;animation:spin 1s linear infinite"></div>
+<div id="loadingText" style="color:#fff;font-size:1.2rem;margin-top:20px;font-weight:bold">読み込み中...</div>
+</div>
+<div id="gameContainer">
+<audio id="bgmAudioElement" loop playsinline style="display:none"></audio>
+<video id="video" autoplay playsinline muted></video>
+<canvas id="overlay"></canvas>
+<div id="titleContainer">
+<img src="https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/background-composite-transparent3.png" alt="AI筋トレRPG" style="max-width:90%;height:auto;max-height:60px;object-fit:contain">
+</div>
+<div id="userDisplay" style="position:absolute;top:70px;left:50%;transform:translateX(-50%);color:#fff;font-size:clamp(0.75rem,2.5vw,0.9rem);text-shadow:2px 2px 4px rgba(0,0,0,0.8),0 0 8px rgba(0,0,0,0.9);z-index:6;white-space:nowrap;font-weight:bold"></div>
+<button id="cameraToggle" onclick="toggleCamera()" style="position:absolute;top:10px;right:10px;z-index:5;padding:8px 10px;background:linear-gradient(135deg,#ff4757,#ff6b81);color:#fff;border:2px solid #fff;border-radius:8px;cursor:pointer;font-size:clamp(0.7rem,2vw,0.9rem);font-weight:bold;transition:background 0.3s;line-height:1.2;width:75px;text-align:center">カメラ</button>
+<button id="bgmToggle" onclick="openBGMModal()" style="position:absolute;top:10px;right:95px;z-index:5;padding:8px 10px;background:linear-gradient(135deg,#3b82f6,#60a5fa);color:#fff;border:2px solid #fff;border-radius:8px;cursor:pointer;font-size:clamp(0.7rem,2vw,0.9rem);font-weight:bold;transition:background 0.3s;line-height:1.2;width:70px;text-align:center">BGM</button>
+<button id="missionBtn" onclick="openMissions()" style="position:absolute;top:10px;right:175px;z-index:5;padding:8px 10px;background:linear-gradient(135deg,#3b82f6,#60a5fa);color:#fff;border:2px solid #fff;border-radius:8px;cursor:pointer;font-size:clamp(0.7rem,2vw,0.9rem);font-weight:bold;transition:background 0.3s;line-height:1.2;width:70px;text-align:center">かだい</button>
+<div id="infoBar">
+<div id="stageInfo">ステージ 1</div>
+<div style="display:flex;align-items:center;gap:15px;flex-grow:1;justify-content:space-between">
+<div id="playTimeDisplay" style="font-size:clamp(1rem,3.5vw,1.3rem);font-weight:700;color:#fff;text-shadow:2px 2px 4px rgba(0,0,0,0.9);white-space:nowrap">時間: <span id="playTime">00:00</span></div>
+<div id="countInfo">
+<div>今回: <span id="currentCount">0</span></div>
+<div id="todayCountDisplay" style="display:block">今日: <span id="todayCount">0</span></div>
+<div id="totalCountDisplay" style="display:none">総計: <span id="totalCount">0</span></div>
+</div>
+</div>
+</div>
+<div id="scoreContainer" style="display:none"></div>
+<div id="enemyContainer">
+<div id="targetName">パンプキンナイト</div>
+<div id="targetHpBar">
+<div id="targetHpFill"></div>
+<div id="targetHpText">HP 5/5</div>
+</div>
+</div>
+<div id="effect">-1 HP</div>
+<span id="treasureDropText">宝箱ドロップ！</span>
+<div id="hint">顎を一番上の点線に合わせる</div>
+<div id="controls">
+<button class="controlBtn" onclick="showGameOver()">スコア保存</button>
+<button class="controlBtn" onclick="openItems()">アイテム</button>
+<button class="controlBtn" onclick="openMonsters()">モンスター</button>
+<button class="controlBtn" onclick="openEffects()">エフェクト</button>
+<button class="controlBtn" id="logoutBtn" onclick="logout()" style="display:none">ログアウト</button>
+<button class="controlBtn" onclick="backToTitle()">タイトルに戻る</button>
+</div>
+<div id="flashEffect"></div>
+<div id="expLabel"></div>
+<div id="levelInfo">Lv.1</div>
+<div id="expBar"><div id="expFill" style="width:0%"><span id="expText">あと10EXP</span></div></div>
+<div id="myMonsterName">スライム</div>
+<div id="myCharacter"></div>
+</div>
+<div id="itemModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1000;justify-content:center;align-items:center;overflow-y:auto">
+<div style="background:linear-gradient(135deg,#1e3a8a,#06b6d4);padding:30px;border-radius:20px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto">
+<h2 style="color:#fff;text-align:center;margin:0 0 20px 0">アイテムボックス</h2>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin:20px 0">
+<div style="text-align:center">
+<div style="font-size:1.1rem;font-weight:bold;color:#CD7F32;margin:5px 0">ブロンズ</div>
+<svg width="80" height="80" viewBox="0 0 80 80" style="margin:10px 0">
+<rect x="15" y="25" width="50" height="40" fill="#8B4513" stroke="#654321" stroke-width="2"/>
+<rect x="15" y="25" width="50" height="10" fill="#CD7F32" stroke="#A0522D" stroke-width="2"/>
+<rect x="37" y="25" width="6" height="40" fill="#CD7F32" stroke="#A0522D" stroke-width="1"/>
+<circle cx="40" cy="25" r="5" fill="#8B0000"/>
+</svg>
+<div style="font-size:1.5rem;font-weight:bold;color:#fff;margin:5px 0"><span id="bronzeTreasureCount">0</span></div>
+<button onclick="openTreasureBox('bronze')" style="width:100%;padding:10px;background:#CD7F32;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;font-weight:bold;margin:5px 0">引く</button>
+</div>
+<div style="text-align:center">
+<div style="font-size:1.1rem;font-weight:bold;color:#C0C0C0;margin:5px 0">シルバー</div>
+<svg width="80" height="80" viewBox="0 0 80 80" style="margin:10px 0">
+<rect x="15" y="25" width="50" height="40" fill="#8B4513" stroke="#654321" stroke-width="2"/>
+<rect x="15" y="25" width="50" height="10" fill="#C0C0C0" stroke="#A9A9A9" stroke-width="2"/>
+<rect x="37" y="25" width="6" height="40" fill="#C0C0C0" stroke="#A9A9A9" stroke-width="1"/>
+<circle cx="40" cy="25" r="5" fill="#8B0000"/>
+</svg>
+<div style="font-size:1.5rem;font-weight:bold;color:#fff;margin:5px 0"><span id="silverTreasureCount">0</span></div>
+<button onclick="openTreasureBox('silver')" style="width:100%;padding:10px;background:#C0C0C0;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;font-weight:bold;margin:5px 0">引く</button>
+</div>
+<div style="text-align:center">
+<div style="font-size:1.1rem;font-weight:bold;color:#FFD700;margin:5px 0">ゴールド</div>
+<svg width="80" height="80" viewBox="0 0 80 80" style="margin:10px 0">
+<rect x="15" y="25" width="50" height="40" fill="#8B4513" stroke="#654321" stroke-width="2"/>
+<rect x="15" y="25" width="50" height="10" fill="#FFD700" stroke="#FFA500" stroke-width="2"/>
+<rect x="37" y="25" width="6" height="40" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+<circle cx="40" cy="25" r="5" fill="#8B0000"/>
+</svg>
+<div style="font-size:1.5rem;font-weight:bold;color:#fff;margin:5px 0"><span id="goldTreasureCount">0</span></div>
+<button onclick="openTreasureBox('gold')" style="width:100%;padding:10px;background:#FFD700;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;font-weight:bold;margin:5px 0">引く</button>
+</div>
+</div>
+<button onclick="closeItemModal()" style="width:100%;padding:12px;background:#f59e0b;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold;margin-top:20px">閉じる</button>
+</div>
+</div>
+<div id="gachaModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1001;justify-content:center;align-items:center">
+<div style="background:#fff;padding:40px;border-radius:20px;text-align:center;max-width:500px;width:90%">
+<div id="rouletteContainer" style="position:relative;width:100%;height:150px;overflow:hidden;border:5px solid #06b6d4;border-radius:15px;margin:20px 0;background:#f5f5f5">
+<div id="rouletteArrow" style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:20px solid transparent;border-right:20px solid transparent;border-top:30px solid red;z-index:10;filter:drop-shadow(0 0 10px rgba(255,0,0,0.8))"></div>
+<div id="roulette" style="position:absolute;top:0;left:0;height:100%;display:flex;align-items:center;transition:none"></div>
+</div>
+<div id="resultIcon" style="font-size:5rem;margin:20px 0;display:none">❓</div>
+<div id="resultText" style="font-size:1.5rem;font-weight:bold;margin:10px 0;white-space:pre-line">ルーレット回転中...</div>
+<div id="gachaButtons" style="display:none;margin-top:20px">
+<button onclick="openTreasureBox(window.currentGachaType)" style="padding:12px 24px;background:#22c55e;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:5px;font-size:1rem">もう一度引く</button>
+<button onclick="closeGachaModal()" style="padding:12px 24px;background:#f59e0b;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:5px;font-size:1rem">閉じる</button>
+</div>
+</div>
+</div>
+<div id="monsterModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1000;justify-content:center;align-items:center;overflow-y:auto">
+<div style="background:linear-gradient(135deg,#1e3a8a,#06b6d4);padding:30px;border-radius:20px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto">
+<h2 style="color:#fff;text-align:center;margin:0 0 20px 0">モンスター図鑑</h2>
+<div id="monsterGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:15px;margin:20px 0"></div>
+<button onclick="closeMonsterModal()" style="width:100%;padding:12px;background:#f59e0b;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold;margin-top:20px">閉じる</button>
+</div>
+</div>
+<div id="effectsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1000;justify-content:center;align-items:center;overflow-y:auto">
+<div style="background:linear-gradient(135deg,#1e3a8a,#06b6d4);padding:30px;border-radius:20px;max-width:500px;width:90%;position:relative">
+<button onclick="closeEffectsModal()" style="position:absolute;top:15px;right:15px;background:#f59e0b;color:#fff;border:none;border-radius:50%;width:35px;height:35px;font-size:1.3rem;cursor:pointer;font-weight:bold">×</button>
+<h2 style="color:#fff;text-align:center;margin:0 0 20px 0">エフェクト設定</h2>
+<div style="display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:20px">
+<button onclick="switchEffectTab(-1)" style="background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:1.5rem;cursor:pointer;font-weight:bold">←</button>
+<div style="display:flex;gap:10px">
+<button id="tabMask" onclick="showEffectTab('mask')" style="padding:10px 20px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:bold">顔マスク</button>
+<button id="tabBg" onclick="showEffectTab('bg')" style="padding:10px 20px;background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:bold">背景</button>
+</div>
+<button onclick="switchEffectTab(1)" style="background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:1.5rem;cursor:pointer;font-weight:bold">→</button>
+</div>
+<div id="maskTab" style="text-align:center;color:#fff">
+<div style="margin-bottom:15px">
+<label style="display:block;margin-bottom:10px;font-weight:bold">プリセット</label>
+<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+<div onclick="loadPresetMask('pumpkin')" style="width:80px;height:80px;border:2px solid #fff;border-radius:10px;cursor:pointer;overflow:hidden;background:#fff">
+<img src="https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/PumpkinFace.png" style="width:100%;height:100%;object-fit:cover">
+</div>
+</div>
+</div>
+<input type="file" id="faceMaskUpload" accept="image/*" style="display:none" onchange="loadFaceMask(event)">
+<div id="maskPreview" style="width:150px;height:150px;margin:10px auto;border:2px dashed #fff;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:rgba(255,255,255,0.1)">
+<span style="color:#fff;font-size:0.9rem">画像なし</span>
+</div>
+<button onclick="document.getElementById('faceMaskUpload').click()" style="width:100%;padding:12px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold;margin:10px 0">アップロード</button>
+<div style="margin:15px 0">
+<label style="display:block;margin:10px 0">サイズ: <span id="maskSizeValue">150</span>px</label>
+<input type="range" id="maskSizeSlider" min="50" max="500" value="150" oninput="updateMaskSize(this.value)" style="width:100%">
+</div>
+<div style="margin:15px 0;display:flex;align-items:center;justify-content:space-between;padding:12px;background:rgba(255,255,255,0.1);border-radius:10px">
+<span style="font-size:1rem;font-weight:bold">ON/OFF</span>
+<label style="position:relative;display:inline-block;width:60px;height:30px;cursor:pointer">
+<input type="checkbox" id="faceMaskToggle" onchange="toggleFaceMask()" style="opacity:0;width:0;height:0">
+<span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;transition:0.3s;border-radius:30px"></span>
+<span style="position:absolute;content:'';height:22px;width:22px;left:4px;bottom:4px;background:white;transition:0.3s;border-radius:50%"></span>
+</label>
+</div>
+<button onclick="clearFaceMask()" style="width:100%;padding:10px;background:#ef4444;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;font-weight:bold">削除</button>
+</div>
+<div id="bgTab" style="display:none;text-align:center;color:#fff">
+<div style="margin-bottom:15px">
+<label style="display:block;margin-bottom:10px;font-weight:bold">プリセット</label>
+<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+<div onclick="loadPresetBg('scifi')" style="width:80px;height:80px;border:2px solid #fff;border-radius:10px;cursor:pointer;overflow:hidden;background:linear-gradient(135deg,#1a1a2e,#16213e)">
+<img src="https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/Sci-Fi%20Home%20Gym.jpg" style="width:100%;height:100%;object-fit:cover">
+</div>
+<div onclick="loadPresetBg('neon')" style="width:80px;height:80px;border:2px solid #fff;border-radius:10px;cursor:pointer;overflow:hidden;background:linear-gradient(135deg,#ff006e,#8338ec)">
+<img src="https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/Neon%20Energy.jpg" style="width:100%;height:100%;object-fit:cover">
+</div>
+<div onclick="loadPresetBg('clean')" style="width:80px;height:80px;border:2px solid #fff;border-radius:10px;cursor:pointer;overflow:hidden;background:linear-gradient(135deg,#f0f0f0,#d0d0d0)">
+<img src="https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/Clean%20Focus%20Grid.jpg" style="width:100%;height:100%;object-fit:cover">
+</div>
+</div>
+</div>
+<input type="file" id="bgEffectUpload" accept="image/*" style="display:none" onchange="loadBgEffect(event)">
+<div id="bgPreview" style="width:150px;height:150px;margin:10px auto;border:2px dashed #fff;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:rgba(255,255,255,0.1)">
+<span style="color:#fff;font-size:0.9rem">画像なし</span>
+</div>
+<button onclick="document.getElementById('bgEffectUpload').click()" style="width:100%;padding:12px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold;margin:10px 0">アップロード</button>
+<div style="margin:15px 0">
+<label style="display:block;margin:10px 0">不透明度: <span id="bgOpacityValue">70%</span></label>
+<input type="range" id="bgOpacitySlider" min="0" max="1" step="0.05" value="0.7" oninput="updateBgOpacity(this.value)" style="width:100%">
+</div>
+<div style="margin:15px 0;display:flex;align-items:center;justify-content:space-between;padding:12px;background:rgba(255,255,255,0.1);border-radius:10px">
+<span style="font-size:1rem;font-weight:bold">ON/OFF</span>
+<label style="position:relative;display:inline-block;width:60px;height:30px;cursor:pointer">
+<input type="checkbox" id="bgEffectToggle" onchange="toggleBgEffect()" style="opacity:0;width:0;height:0">
+<span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;transition:0.3s;border-radius:30px"></span>
+<span style="position:absolute;content:'';height:22px;width:22px;left:4px;bottom:4px;background:white;transition:0.3s;border-radius:50%"></span>
+</label>
+</div>
+<button onclick="clearBgEffect()" style="width:100%;padding:10px;background:#ef4444;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;font-weight:bold">削除</button>
+</div>
+</div>
+</div>
+<div id="bgmModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1000;justify-content:center;align-items:center;overflow-y:auto">
+<div style="background:linear-gradient(135deg,#1e3a8a,#06b6d4);padding:30px;border-radius:20px;max-width:500px;width:90%">
+<h2 style="color:#fff;text-align:center;margin:0 0 20px 0">BGM設定</h2>
+<div style="background:rgba(255,255,255,0.15);border-radius:10px;padding:15px;margin-bottom:20px">
+<p style="color:#fff;font-size:0.85rem;margin:0;line-height:1.6">
+<strong>⚠️ iOS/iPhoneをご利用の方へ</strong><br>
+タスクを切ると、BGMが再生できなくなることがあります。<br><br>
+<strong>対処法:</strong><br>
+• もう一度BGMボタンを押す<br>
+• YouTubeなど他のアプリで音楽を再生してから戻る
+</p>
+</div>
+<div style="text-align:center;color:#fff">
+<div style="margin:20px 0;display:flex;align-items:center;justify-content:space-between;padding:15px;background:rgba(255,255,255,0.1);border-radius:10px">
+<span style="font-size:1.1rem;font-weight:bold">パンプキンナイト</span>
+<label style="position:relative;display:inline-block;width:60px;height:30px;cursor:pointer">
+<input type="checkbox" id="pumpkinBGMToggle" onchange="toggleBGM('pumpkin')" style="opacity:0;width:0;height:0">
+<span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;transition:0.3s;border-radius:30px"></span>
+<span style="position:absolute;content:'';height:22px;width:22px;left:4px;bottom:4px;background:white;transition:0.3s;border-radius:50%"></span>
+</label>
+</div>
+</div>
+<button onclick="closeBGMModal()" style="width:100%;padding:12px;background:#f59e0b;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold;margin-top:20px">閉じる</button>
+</div>
+</div>
+<div id="missionModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1000;justify-content:center;align-items:center;overflow-y:auto">
+<div style="background:linear-gradient(135deg,#1e3a8a,#06b6d4);padding:30px;border-radius:20px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto">
+<h2 style="color:#fff;text-align:center;margin:0 0 20px 0">&#12487;&#12452;&#12522;&#12540;&#12511;&#12483;&#12471;&#12519;&#12531;</h2>
+<div id="missionList" style="display:flex;flex-direction:column;gap:15px;margin:20px 0"></div>
+<button onclick="closeMissionModal()" style="width:100%;padding:12px;background:#f59e0b;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold;margin-top:20px">&#38281;&#12376;&#12427;</button>
+</div>
+</div>
+<div id="gameOverModal">
+<div id="gameOverContent">
+<h2>お疲れ様でした</h2>
+<p>到達ステージ: <strong id="finalStage">0</strong></p>
+<p>スクワット回数: <strong id="finalSquats">0</strong></p>
+<input type="text" id="playerName" placeholder="プレイヤー名を入力" maxlength="20">
+<div style="margin:15px 0">
+<label style="color:#fff;font-size:0.9rem;display:block;margin-bottom:8px">シェアパターン:</label>
+<select id="sharePattern" style="width:100%;padding:8px;font-size:1rem;border-radius:8px;border:2px solid #06b6d4">
+<option value="1">モチベーション型</option>
+<option value="2">リアル実況型</option>
+<option value="3">ユーモア型</option>
+</select>
+</div>
+<div>
+<button class="btnSave" onclick="saveScoreToSheet()">スコア保存</button>
+<button class="btnSave" onclick="showSharePreview()" style="background:#1DA1F2">SNSにシェア</button>
+<button class="btnSave" onclick="showXSharePreview()" style="background:#000">Xにシェア</button>
+<button class="btnRestart" onclick="backToTitle()">タイトルに戻る</button>
+<button class="btnRestart" onclick="closeModal()">続ける</button>
+</div>
+</div>
+</div>
+<div id="sharePreviewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:10002;justify-content:center;align-items:center;overflow-y:auto">
+<div style="background:linear-gradient(135deg,#1e3a8a,#06b6d4);padding:30px;border-radius:20px;max-width:600px;width:90%;max-height:90vh;overflow-y:auto">
+<h2 style="color:#fff;text-align:center;margin:0 0 20px 0">シェア画像プレビュー</h2>
+<div style="background:#fff;border-radius:10px;padding:10px;margin:20px 0">
+<canvas id="sharePreviewCanvas" style="width:100%;height:auto;display:block"></canvas>
+</div>
+<div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:15px;margin:20px 0">
+<p style="color:#fff;margin:0;white-space:pre-wrap;font-size:0.9rem" id="sharePreviewText"></p>
+</div>
+<button onclick="executeShare()" style="width:100%;padding:15px;background:#1DA1F2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1.1rem;font-weight:bold;margin:10px 0">シェアする</button>
+<button onclick="closeSharePreview()" style="width:100%;padding:12px;background:#f59e0b;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold">閉じる</button>
+</div>
+</div>
+<div id="xSharePreviewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:10002;justify-content:center;align-items:center;overflow-y:auto">
+<div style="background:linear-gradient(135deg,#1e3a8a,#06b6d4);padding:30px;border-radius:20px;max-width:600px;width:90%;max-height:90vh;overflow-y:auto">
+<h2 style="color:#fff;text-align:center;margin:0 0 10px 0">Xシェアプレビュー</h2>
+<div style="background:linear-gradient(135deg,#C0C0C0,#E8E8E8);border-radius:10px;padding:12px;margin:10px 0;text-align:center">
+<p style="color:#333;margin:0;font-size:0.9rem;font-weight:bold">🎁 シェアでシルバー宝箱×1ゲット！</p>
+</div>
+<div style="background:rgba(255,100,100,0.2);border-radius:10px;padding:12px;margin:15px 0;border:2px solid #ff6b6b">
+<p style="color:#fff;margin:0;font-size:0.85rem;line-height:1.6">⚠️ Xの仕様上、画像は自動添付されません。<br>下記画像を長押し保存して、X投稿時に手動で添付してください。</p>
+</div>
+<div style="background:#fff;border-radius:10px;padding:10px;margin:20px 0">
+<canvas id="xSharePreviewCanvas" style="width:100%;height:auto;display:block"></canvas>
+</div>
+<div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:15px;margin:20px 0">
+<p style="color:#fff;margin:0;white-space:pre-wrap;font-size:0.9rem" id="xSharePreviewText"></p>
+</div>
+<button onclick="executeXShare()" style="width:100%;padding:15px;background:#000;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1.1rem;font-weight:bold;margin:10px 0">Xに投稿する</button>
+<button onclick="closeXSharePreview()" style="width:100%;padding:12px;background:#f59e0b;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold">閉じる</button>
+</div>
+</div>

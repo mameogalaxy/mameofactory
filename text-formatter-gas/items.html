@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>アイテムボックス - AIスクワットRPG</title>
+<style>
+body{margin:0;padding:0;font-family:sans-serif;background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh}
+.container{max-width:800px;margin:0 auto;padding:20px}
+h1{color:#fff;text-align:center;margin:20px 0;text-shadow:2px 2px 4px rgba(0,0,0,0.3)}
+.back-btn{display:inline-block;padding:10px 20px;background:#fff;color:#667eea;text-decoration:none;border-radius:8px;margin:10px;font-weight:bold}
+.treasure-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:15px;margin:20px 0}
+.treasure-item{background:#fff;border-radius:15px;padding:20px;text-align:center;box-shadow:0 4px 10px rgba(0,0,0,0.2);cursor:pointer;transition:transform 0.2s}
+.treasure-item:hover{transform:scale(1.05)}
+.treasure-icon{font-size:3rem;margin:10px 0}
+.treasure-count{font-size:1.2rem;font-weight:bold;color:#667eea}
+#openModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;justify-content:center;align-items:center}
+#openContent{background:#fff;padding:40px;border-radius:20px;text-align:center;max-width:400px}
+.result-icon{font-size:5rem;margin:20px 0}
+.result-text{font-size:1.5rem;font-weight:bold;margin:10px 0}
+.close-btn{padding:12px 30px;background:#667eea;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-top:20px;font-size:1rem}
+#roulette{width:300px;height:300px;border:5px solid #667eea;border-radius:50%;position:relative;margin:20px auto;overflow:hidden}
+.roulette-item{position:absolute;width:50%;height:50%;transform-origin:100% 100%;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:bold}
+#rouletteArrow{position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:3rem;z-index:10}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🎁 アイテムボックス</h1>
+<a href="<?= ScriptApp.getService().getUrl() ?>" class="back-btn">← ゲームに戻る</a>
+<div class="treasure-list">
+<div class="treasure-item" onclick="openTreasure()">
+<div class="treasure-icon">📦</div>
+<div class="treasure-count">宝箱 × <span id="treasureCount">0</span></div>
+</div>
+</div>
+</div>
+<div id="openModal">
+<div id="openContent">
+<div id="rouletteArrow">▼</div>
+<div id="roulette"></div>
+<div class="result-icon" id="resultIcon" style="display:none">❓</div>
+<div class="result-text" id="resultText">ルーレット回転中...</div>
+<button class="close-btn" onclick="closeModal()" style="display:none" id="closeBtn">閉じる</button>
+</div>
+</div>
+<script>
+let treasureCount=0;
+window.addEventListener('DOMContentLoaded',function(){
+const saved=localStorage.getItem('treasureCount');
+if(saved)treasureCount=parseInt(saved);
+document.getElementById('treasureCount').textContent=treasureCount;
+});
+const items=[{icon:'🐉',name:'レアモンスター',rate:0.1,color:'#FFD700'},{icon:'🦎',name:'モンスター',rate:0.2,color:'#C0C0C0'},{icon:'💔',name:'はずれ',rate:0.7,color:'#999'}];
+function openTreasure(){
+if(treasureCount<=0){
+alert('宝箱がありません');
+return;
+}
+treasureCount--;
+localStorage.setItem('treasureCount',treasureCount);
+document.getElementById('treasureCount').textContent=treasureCount;
+const modal=document.getElementById('openModal');
+modal.style.display='flex';
+document.getElementById('resultIcon').style.display='none';
+document.getElementById('closeBtn').style.display='none';
+document.getElementById('resultText').textContent='ルーレット回転中...';
+const roulette=document.getElementById('roulette');
+roulette.innerHTML='';
+const total=items.length;
+for(let i=0;i<total;i++){
+const item=document.createElement('div');
+item.className='roulette-item';
+item.style.background=items[i].color;
+item.style.transform='rotate('+(i*360/total)+'deg) skewY('+(90-360/total)+'deg)';
+item.textContent=items[i].icon;
+roulette.appendChild(item);
+}
+let rotation=0;
+const spinDuration=3000;
+const spinSpeed=50;
+const maxRotation=360*5;
+const startTime=Date.now();
+const rand=Math.random();
+let result=items[items.length-1];
+let cumulative=0;
+for(let i=0;i<items.length;i++){
+cumulative+=items[i].rate;
+if(rand<cumulative){
+result=items[i];
+break;
+}
+}
+const targetRotation=maxRotation+(360/total)*items.indexOf(result);
+function spin(){
+const elapsed=Date.now()-startTime;
+const progress=Math.min(elapsed/spinDuration,1);
+const easeOut=1-Math.pow(1-progress,3);
+rotation=targetRotation*easeOut;
+roulette.style.transform='rotate('+rotation+'deg)';
+if(progress<1){
+requestAnimationFrame(spin);
+}else{
+showResult(result);
+}
+}
+spin();
+}
+function showResult(result){
+setTimeout(function(){
+document.getElementById('resultIcon').textContent=result.icon;
+document.getElementById('resultIcon').style.display='block';
+if(result.name==='はずれ'){
+document.getElementById('resultText').textContent='はずれ...';
+}else{
+document.getElementById('resultText').textContent=result.name+'獲得！';
+}
+document.getElementById('closeBtn').style.display='block';
+document.getElementById('roulette').style.display='none';
+},500);
+}
+function closeModal(){
+document.getElementById('openModal').style.display='none';
+}
+</script>
+</body>
+</html>

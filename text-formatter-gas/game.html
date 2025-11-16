@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>AI筋トレゲーム</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5"></script>
+<?!= HtmlService.createHtmlOutputFromFile('styles').getContent(); ?>
+</head>
+<body>
+<?!= HtmlService.createHtmlOutputFromFile('loginScreen').getContent(); ?>
+<?!= HtmlService.createHtmlOutputFromFile('startScreen').getContent(); ?>
+<?!= HtmlService.createHtmlOutputFromFile('body').getContent(); ?>
+<?!= HtmlService.createHtmlOutputFromFile('how-to-play').getContent(); ?>
+<?!= HtmlService.createHtmlOutputFromFile('script').getContent(); ?>
+</body>
+</html>

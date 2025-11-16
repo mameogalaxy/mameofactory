@@ -1,0 +1,408 @@
+<div id="loginScreen" style="position:fixed;inset:0;background:linear-gradient(135deg,#1e3a8a,#0891b2,#06b6d4,#22d3ee);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px;overflow-y:auto">
+<img src="https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/background-composite-transparent3.png" alt="AI筋トレRPG" style="max-width:90%;height:auto;max-height:clamp(60px,12vh,100px);margin:0 0 clamp(8px,1.5vh,15px) 0;object-fit:contain;flex-shrink:0">
+<div style="background:rgba(255,255,255,0.95);border:3px solid #06b6d4;border-radius:20px;padding:clamp(20px,4vh,30px);max-width:400px;width:90%;box-shadow:0 0 30px rgba(6,182,212,0.6);max-height:80vh;overflow-y:auto">
+<h2 style="text-align:center;color:#0891b2;margin:0 0 20px 0;font-size:1.8rem;font-weight:900">ログイン / 新規登録</h2>
+
+<div style="margin-bottom:20px">
+<label style="display:block;color:#0891b2;font-weight:bold;margin-bottom:5px">ユーザー名</label>
+<input type="text" id="loginUsername" placeholder="ユーザー名" style="width:100%;padding:12px;font-size:1rem;border:2px solid #06b6d4;border-radius:8px;box-sizing:border-box">
+</div>
+
+<div style="margin-bottom:20px">
+<label style="display:block;color:#0891b2;font-weight:bold;margin-bottom:5px">メールアドレス</label>
+<input type="email" id="loginEmail" placeholder="example@email.com" style="width:100%;padding:12px;font-size:1rem;border:2px solid #06b6d4;border-radius:8px;box-sizing:border-box">
+</div>
+
+<div style="margin-bottom:20px">
+<label style="display:block;color:#0891b2;font-weight:bold;margin-bottom:5px">パスワード</label>
+<input type="password" id="loginPassword" placeholder="パスワード" style="width:100%;padding:12px;font-size:1rem;border:2px solid #06b6d4;border-radius:8px;box-sizing:border-box">
+</div>
+
+<div style="margin-bottom:20px">
+<label style="display:flex;align-items:center;color:#0891b2;cursor:pointer">
+<input type="checkbox" id="rememberMe" style="margin-right:8px;width:18px;height:18px;cursor:pointer">
+<span style="font-size:0.9rem">ログイン情報を記憶する</span>
+</label>
+</div>
+
+<div style="display:flex;gap:10px;margin-bottom:15px">
+<button onclick="handleLogin()" style="flex:1;padding:15px;background:#3b82f6;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:1.1rem;font-weight:bold;box-shadow:0 4px 15px rgba(59,130,246,0.4)">ログイン</button>
+<button onclick="handleRegister()" style="flex:1;padding:15px;background:#22c55e;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:1.1rem;font-weight:bold;box-shadow:0 4px 15px rgba(34,197,94,0.4)">新規登録</button>
+</div>
+
+<div style="text-align:center;margin:15px 0;color:#64748b;font-size:0.9rem">または</div>
+
+<button onclick="startGuestMode()" style="width:100%;padding:15px;background:#f59e0b;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:1.1rem;font-weight:bold;box-shadow:0 4px 15px rgba(245,158,11,0.4)">ゲストモードで遊ぶ</button>
+
+<div style="margin-top:15px;padding:10px;background:rgba(255,255,255,0.2);border-radius:8px;font-size:0.85rem;color:#fff;text-align:center">ゲストモード: データは保存されません<br>ログイン: 進行状況を保存できます</div>
+
+<div id="loginMessage" style="margin-top:15px;padding:10px;border-radius:8px;text-align:center;font-weight:bold;display:none"></div>
+</div>
+</div>
+
+<script>
+function showLoginScreen() {
+  const savedUsername = localStorage.getItem('savedUsername');
+  const savedEmail = localStorage.getItem('savedEmail');
+  
+  if (savedUsername) {
+    document.getElementById('loginUsername').value = savedUsername;
+  }
+  if (savedEmail) {
+    document.getElementById('loginEmail').value = savedEmail;
+  }
+  if (savedUsername && savedEmail) {
+    document.getElementById('rememberMe').checked = true;
+  }
+  
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+function hideLoginScreen() {
+  document.getElementById('loginScreen').style.display = 'none';
+}
+
+function showLoginMessage(message, isError) {
+  const msgEl = document.getElementById('loginMessage');
+  msgEl.textContent = message;
+  msgEl.style.display = 'block';
+  msgEl.style.background = isError ? '#fee' : '#efe';
+  msgEl.style.color = isError ? '#c00' : '#060';
+  msgEl.style.border = '2px solid ' + (isError ? '#c00' : '#060');
+  if(!isError){
+    setTimeout(function(){
+      msgEl.style.display='none';
+    },2000);
+  }
+}
+
+function handleLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const rememberMe = document.getElementById('rememberMe').checked;
+  
+  if (!username || !email || !password) {
+    showLoginMessage('全ての項目を入力してください', true);
+    return;
+  }
+  
+  showLoginMessage('ログイン中...', false);
+  showLoading('初期化中...');
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        const savedUsername = localStorage.getItem('savedUsername');
+        const savedEmail = localStorage.getItem('savedEmail');
+        const rememberMeChecked = document.getElementById('rememberMe').checked;
+        localStorage.clear();
+        if (savedUsername && rememberMeChecked) localStorage.setItem('savedUsername', savedUsername);
+        if (savedEmail && rememberMeChecked) localStorage.setItem('savedEmail', savedEmail);
+        
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('userEmail', email);
+        localStorage.setItem('username', result.userData.username || email.split('@')[0]);
+        
+        const monsterData = JSON.parse(result.userData.monsterData);
+        localStorage.setItem('ownedMonsters', JSON.stringify(monsterData.owned));
+        localStorage.setItem('activeMonster', monsterData.active);
+        
+        if (monsterData.owned && monsterData.owned.length > 0) {
+          const activeMonster = monsterData.owned.find(m => m.id === monsterData.active);
+          if (activeMonster) {
+            playerLevel = activeMonster.level || 1;
+            playerExp = activeMonster.exp || 0;
+            localStorage.setItem('playerLevel', playerLevel);
+            localStorage.setItem('playerExp', playerExp);
+          }
+        }
+        
+        const today = new Date().toDateString();
+        const lastPlayDate = result.userData.lastPlayDate || '';
+        let todayCount = result.userData.todayCount || 0;
+        
+        dailyTotal = todayCount;
+        totalSquats = 0;
+        localStorage.setItem('initialDailyTotal', todayCount);
+        localStorage.setItem('dailyTotal', dailyTotal);
+        localStorage.setItem('lastDate', lastPlayDate || today);
+        localStorage.setItem('totalCount', result.userData.totalCount || 0);
+        const username = result.userData.username || email.split('@')[0];
+        localStorage.setItem('bronzeTreasureCount_'+username, result.userData.bronzeTreasure || 0);
+        localStorage.setItem('silverTreasureCount_'+username, result.userData.silverTreasure || 0);
+        localStorage.setItem('goldTreasureCount_'+username, result.userData.goldTreasure || 0);
+        localStorage.setItem('loginClaimed', result.userData.loginClaimed || false);
+        localStorage.setItem('playsClaimed', result.userData.playsClaimed || false);
+        localStorage.setItem('timeClaimed', result.userData.timeClaimed || false);
+        
+        if (rememberMe) {
+          localStorage.setItem('savedUsername', username);
+          localStorage.setItem('savedEmail', email);
+        }
+        
+        showLoginMessage(result.message, false);
+        initializeGameAfterLogin();
+      } else {
+        hideLoading();
+        showLoginMessage(result.message, true);
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      showLoginMessage('エラー: ' + error, true);
+    })
+    .loginUser(username, email, password);
+}
+
+function initializeGameAfterLogin(){
+  updateExpUI();
+  updateUI();
+  loadMissions();
+  
+  if(!localStorage.getItem('activeMonster')){
+    setTimeout(showStarterSelection,100);
+  }else{
+    drawActiveMonster();
+  }
+  
+  loadRankingDataWithCallback(function(){
+    hideLoading();
+    hideLoginScreen();
+    document.getElementById('startScreen').style.display='flex';
+    document.getElementById('gameContainer').style.display='block';
+    const saveBtn=document.getElementById('saveBtn');
+    const logoutBtn=document.getElementById('logoutBtn');
+    if(saveBtn)saveBtn.style.display='block';
+    if(logoutBtn)logoutBtn.style.display='block';
+    const userDisplay=document.getElementById('userDisplay');
+    if(userDisplay)userDisplay.textContent=localStorage.getItem('username')||'ゲスト';
+    const totalCountDisplay=document.getElementById('totalCountDisplay');
+    if(totalCountDisplay)totalCountDisplay.style.display='block';
+    startAutoSave();
+    showStartScreen();
+  });
+}
+
+function handleRegister() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  
+  if (!username || !email || !password) {
+    showLoginMessage('全ての項目を入力してください', true);
+    return;
+  }
+  
+  if (password.length < 6) {
+    showLoginMessage('パスワードは6文字以上にしてください', true);
+    return;
+  }
+  
+  showLoginMessage('登録中...', false);
+  showLoading('初期化中...');
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success && result.autoLogin) {
+        const savedUsername = localStorage.getItem('savedUsername');
+        const savedEmail = localStorage.getItem('savedEmail');
+        localStorage.clear();
+        if (savedUsername) localStorage.setItem('savedUsername', savedUsername);
+        if (savedEmail) localStorage.setItem('savedEmail', savedEmail);
+        
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('userEmail', email);
+        localStorage.setItem('username', result.userData.username);
+        
+        const monsterData = JSON.parse(result.userData.monsterData);
+        if(monsterData.owned && monsterData.owned.length > 0){
+          localStorage.setItem('ownedMonsters', JSON.stringify(monsterData.owned));
+          localStorage.setItem('activeMonster', monsterData.active);
+        }
+        localStorage.setItem('playerLevel', '1');
+        localStorage.setItem('playerExp', '0');
+        playerLevel = 1;
+        playerExp = 0;
+        
+        const today = new Date().toDateString();
+        dailyTotal = 0;
+        totalSquats = 0;
+        localStorage.setItem('dailyTotal', '0');
+        localStorage.setItem('initialDailyTotal', '0');
+        localStorage.setItem('lastDate', today);
+        localStorage.setItem('totalCount', '0');
+        localStorage.setItem('bronzeTreasureCount_'+username, '0');
+        localStorage.setItem('silverTreasureCount_'+username, '0');
+        localStorage.setItem('goldTreasureCount_'+username, '0');
+        
+        showLoginMessage(result.message + ' ゲームを開始します！', false);
+        initializeGameAfterLogin();
+      } else if (result.success) {
+        hideLoading();
+        showLoginMessage(result.message + ' ログインしてください', false);
+      } else {
+        hideLoading();
+        showLoginMessage(result.message, true);
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      showLoginMessage('エラー: ' + error, true);
+    })
+    .registerNewUser(username, email, password);
+}
+
+function startGuestMode() {
+  showLoading('初期化中...');
+  
+  const savedUsername = localStorage.getItem('savedUsername');
+  const savedEmail = localStorage.getItem('savedEmail');
+  
+  localStorage.clear();
+  
+  if (savedUsername) localStorage.setItem('savedUsername', savedUsername);
+  if (savedEmail) localStorage.setItem('savedEmail', savedEmail);
+  
+  localStorage.setItem('isLoggedIn', 'false');
+  localStorage.setItem('username', 'ゲスト');
+  localStorage.setItem('playerLevel', '1');
+  localStorage.setItem('playerExp', '0');
+  localStorage.setItem('dailyTotal', '0');
+  localStorage.setItem('lastDate', new Date().toDateString());
+  
+  playerLevel = 1;
+  playerExp = 0;
+  dailyTotal = 0;
+  totalSquats = 0;
+  
+  video=document.getElementById('video');
+  canvas=document.getElementById('overlay');
+  if(canvas)ctx=canvas.getContext('2d');
+  
+  loadMissions();
+  
+  if(!localStorage.getItem('activeMonster')){
+    setTimeout(showStarterSelection,100);
+  }else{
+    updateUI();
+    updateExpUI();
+    drawActiveMonster();
+  }
+  
+  loadRankingDataWithCallback(function(){
+    hideLoading();
+    hideLoginScreen();
+    document.getElementById('startScreen').style.display='flex';
+    document.getElementById('gameContainer').style.display='block';
+    const saveBtn=document.getElementById('saveBtn');
+    const logoutBtn=document.getElementById('logoutBtn');
+    if(saveBtn)saveBtn.style.display='none';
+    if(logoutBtn)logoutBtn.style.display='none';
+    const totalCountDisplay=document.getElementById('totalCountDisplay');
+    if(totalCountDisplay)totalCountDisplay.style.display='none';
+    const todayCountDisplay=document.getElementById('todayCountDisplay');
+    if(todayCountDisplay)todayCountDisplay.style.display='none';
+    const userDisplay=document.getElementById('userDisplay');
+    if(userDisplay)userDisplay.textContent='ゲスト';
+    showStartScreen();
+  });
+}
+
+function saveUserProgress() {
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+  if (!isLoggedIn) return;
+  
+  const email = localStorage.getItem('userEmail');
+  if (!email) return;
+  
+  const ownedMonsters = JSON.parse(localStorage.getItem('ownedMonsters') || '[]');
+  const activeMonster = localStorage.getItem('activeMonster') || 'slime';
+  
+  const ownedWithLevels = ownedMonsters.map(function(monster) {
+    if (typeof monster === 'string') {
+      return { id: monster, level: 1, exp: 0 };
+    }
+    return monster;
+  });
+  
+  const activeMonsterData = ownedWithLevels.find(m => m.id === activeMonster);
+  if (activeMonsterData) {
+    activeMonsterData.level = playerLevel;
+    activeMonsterData.exp = playerExp;
+  }
+  
+  const monsterData = JSON.stringify({
+    owned: ownedWithLevels,
+    active: activeMonster
+  });
+  
+  const todayCount = dailyTotal;
+  const username = localStorage.getItem('username') || 'guest';
+  const bronzeTreasure = parseInt(localStorage.getItem('bronzeTreasureCount_'+username) || '0');
+  const silverTreasure = parseInt(localStorage.getItem('silverTreasureCount_'+username) || '0');
+  const goldTreasure = parseInt(localStorage.getItem('goldTreasureCount_'+username) || '0');
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success && result.totalCount !== undefined) {
+        localStorage.setItem('totalCount', result.totalCount);
+        localStorage.setItem('dailyTotal', todayCount);
+        updateUI();
+      }
+    })
+    .withFailureHandler(function(error) {
+      console.error('保存エラー:', error);
+    })
+    .saveUserData(email, monsterData, todayCount, bronzeTreasure, silverTreasure, goldTreasure);
+}
+
+let autoSaveInterval=null;
+
+function startAutoSave(){
+  if(autoSaveInterval)clearInterval(autoSaveInterval);
+  autoSaveInterval=setInterval(function(){
+    saveUserProgress();
+  },60000);
+}
+
+function manualSave(){
+  const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+  if(!isLoggedIn){
+    showMessage('ゲストモードでは保存できません');
+    return;
+  }
+  showMessage('保存中...');
+  saveUserProgress();
+  setTimeout(function(){
+    showMessage('保存完了！');
+  },1000);
+}
+
+function loadRankingDataWithCallback(callback){
+  const tbody=document.getElementById('rankingTable');
+  if(!tbody){if(callback)callback();return;}
+  tbody.innerHTML='<tr><td colspan="4" style="padding:20px;text-align:center;color:#999">ロード中...</td></tr>';
+  const SHEET_ID='180zH4Ba5OTXMCN5abNQQsICWACn6IKTNQ0q8Wo8jmuc';
+  const SHEET_NAME='スコア';
+  const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json&sheet='+SHEET_NAME;
+  fetch(url).then(function(r){return r.text();}).then(function(text){
+    const json=JSON.parse(text.substr(47).slice(0,-2));
+    const rows=json.table.rows;
+    if(rows.length<=1){tbody.innerHTML='<tr><td colspan="4" style="padding:20px;text-align:center">データがありません</td></tr>';if(callback)callback();return;}
+    const scores=rows.slice(1).map(function(r){return{name:r.c[1]?r.c[1].v:'',stage:r.c[3]?r.c[3].v:0,squats:r.c[4]?r.c[4].v:0};}).filter(function(s){return s.name;});
+    scores.sort(function(a,b){return b.stage-a.stage||b.squats-a.squats;});
+    let html='';
+    scores.slice(0,10).forEach(function(item,i){
+      const rank=i+1;
+      let color='#333';
+      if(rank===1)color='#FFD700';
+      else if(rank===2)color='#C0C0C0';
+      else if(rank===3)color='#CD7F32';
+      html+='<tr style="border-bottom:1px solid #eee"><td style="padding:clamp(6px,1vh,10px);text-align:center;font-weight:bold;color:'+color+';font-size:clamp(0.8rem,2vw,1rem)">'+rank+'</td><td style="padding:clamp(6px,1vh,10px);text-align:center;font-size:clamp(0.8rem,2vw,1rem)">'+item.name+'</td><td style="padding:clamp(6px,1vh,10px);text-align:center;font-size:clamp(0.8rem,2vw,1rem)"><strong>'+item.stage+'</strong></td><td style="padding:clamp(6px,1vh,10px);text-align:center;font-size:clamp(0.8rem,2vw,1rem)">'+item.squats+'</td></tr>';
+    });
+    tbody.innerHTML=html;
+    if(callback)callback();
+  }).catch(function(){tbody.innerHTML='<tr><td colspan="4" style="padding:20px;text-align:center">読み込みエラー</td></tr>';if(callback)callback();});
+}
+</script>

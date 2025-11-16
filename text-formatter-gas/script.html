@@ -301,6 +301,13 @@ async function loop(){
   
   ctx.clearRect(0,0,canvas.width,canvas.height);
   
+  if(bgEffectEnabled&&bgEffectImage){
+    ctx.save();
+    ctx.globalAlpha=bgEffectOpacity;
+    ctx.drawImage(bgEffectImage,0,0,canvas.width,canvas.height);
+    ctx.restore();
+  }
+  
   const isMobile=window.innerWidth<=768;
   const lineY1=canvas.height*(isMobile?0.65:0.6);
   const lineY2=canvas.height*(isMobile?0.75:0.7);
@@ -455,11 +462,6 @@ function shareToX(){
   }
   const shareUrl='https://twitter.com/intent/tweet?text='+encodeURIComponent(text);
   window.open(shareUrl,'_blank','width=550,height=420');
-  const username=localStorage.getItem('username')||'guest';
-  let count=parseInt(localStorage.getItem('goldTreasureCount_'+username)||'0');
-  count++;
-  localStorage.setItem('goldTreasureCount_'+username,count);
-  showMessage('\u30b4\u30fc\u30eb\u30c9\u5b9d\u7bb1\u3092\u7372\u5f97\uff01');
 }
 
 function generateResultImage(){
@@ -1054,9 +1056,9 @@ normalGachaImg.src='https://raw.githubusercontent.com/mameogalaxy/mameofactory/m
 const rareGachaImg=new Image();
 rareGachaImg.src='https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/upscaled/super-rare-gacha.png';
 const treasureRates={
-  bronze:[{icon:'rare',name:'レアモンスター',rate:0.01,color:'#FFD700'},{icon:'normal',name:'モンスター',rate:0.19,color:'#4CAF50'},{icon:'miss',name:'はずれ',rate:0.8,color:'#999'}],
-  silver:[{icon:'rare',name:'レアモンスター',rate:0.1,color:'#FFD700'},{icon:'normal',name:'モンスター',rate:0.4,color:'#4CAF50'},{icon:'miss',name:'はずれ',rate:0.5,color:'#999'}],
-  gold:[{icon:'rare',name:'レアモンスター',rate:0.5,color:'#FFD700'},{icon:'normal',name:'モンスター',rate:0.3,color:'#4CAF50'},{icon:'miss',name:'はずれ',rate:0.2,color:'#999'}]
+  bronze:[{icon:'rare',name:'レアモンスター',rate:0.005,color:'#FFD700'},{icon:'normal',name:'モンスター',rate:0.095,color:'#4CAF50'},{icon:'miss',name:'はずれ',rate:0.9,color:'#999'}],
+  silver:[{icon:'rare',name:'レアモンスター',rate:0.03,color:'#FFD700'},{icon:'normal',name:'モンスター',rate:0.17,color:'#4CAF50'},{icon:'miss',name:'はずれ',rate:0.8,color:'#999'}],
+  gold:[{icon:'rare',name:'レアモンスター',rate:0.15,color:'#FFD700'},{icon:'normal',name:'モンスター',rate:0.35,color:'#4CAF50'},{icon:'miss',name:'はずれ',rate:0.5,color:'#999'}]
 };
 
 function openTreasureBox(type){
@@ -1480,19 +1482,40 @@ function closeMonsterModal(){
 let faceMaskImage=null;
 let faceMaskEnabled=false;
 let faceMaskSize=150;
+let bgEffectImage=null;
+let bgEffectEnabled=false;
+let bgEffectOpacity=0.7;
 
-function openFaceMask(){
-  document.getElementById('faceMaskModal').style.display='flex';
+let currentEffectTab='mask';
+
+function openEffects(){
+  document.getElementById('effectsModal').style.display='flex';
+  showEffectTab(currentEffectTab);
 }
 
-function closeFaceMaskModal(){
-  document.getElementById('faceMaskModal').style.display='none';
+function closeEffectsModal(){
+  document.getElementById('effectsModal').style.display='none';
   setTimeout(function(){
     if(!isLooping&&detector&&isCameraOn){
       isLooping=true;
       loop();
     }
   },100);
+}
+
+function showEffectTab(tab){
+  currentEffectTab=tab;
+  document.getElementById('maskTab').style.display=tab==='mask'?'block':'none';
+  document.getElementById('bgTab').style.display=tab==='bg'?'block':'none';
+  document.getElementById('tabMask').style.background=tab==='mask'?'#3b82f6':'rgba(255,255,255,0.2)';
+  document.getElementById('tabBg').style.background=tab==='bg'?'#3b82f6':'rgba(255,255,255,0.2)';
+}
+
+function switchEffectTab(direction){
+  const tabs=['mask','bg'];
+  const idx=tabs.indexOf(currentEffectTab);
+  const newIdx=(idx+direction+tabs.length)%tabs.length;
+  showEffectTab(tabs[newIdx]);
 }
 
 function loadPresetMask(type){
@@ -1584,6 +1607,100 @@ function clearFaceMask(){
   showMessage('画像を削除しました');
 }
 
+
+
+function loadPresetBg(type){
+  const colors={'green':'#00ff00','blue':'#0080ff'};
+  const canvas=document.createElement('canvas');
+  canvas.width=100;
+  canvas.height=100;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle=colors[type]||'#00ff00';
+  ctx.fillRect(0,0,100,100);
+  const img=new Image();
+  img.onload=function(){
+    bgEffectImage=img;
+    const preview=document.getElementById('bgPreview');
+    preview.innerHTML='';
+    preview.style.background=colors[type]||'#00ff00';
+    const toggle=document.getElementById('bgEffectToggle');
+    toggle.checked=true;
+    bgEffectEnabled=true;
+    const slider=toggle.nextElementSibling;
+    const circle=slider.nextElementSibling;
+    slider.style.background='#22c55e';
+    circle.style.transform='translateX(30px)';
+    showMessage('背景を選択しました');
+  };
+  img.src=canvas.toDataURL();
+}
+
+function loadBgEffect(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const img=new Image();
+    img.onload=function(){
+      bgEffectImage=img;
+      const preview=document.getElementById('bgPreview');
+      preview.innerHTML='';
+      const previewImg=document.createElement('img');
+      previewImg.src=e.target.result;
+      previewImg.style.width='100%';
+      previewImg.style.height='100%';
+      previewImg.style.objectFit='cover';
+      preview.appendChild(previewImg);
+      showMessage('画像を読み込みました');
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+
+
+function toggleBgEffect(){
+  const toggle=document.getElementById('bgEffectToggle');
+  if(!bgEffectImage){
+    showMessage('画像を選択してください');
+    toggle.checked=false;
+    return;
+  }
+  bgEffectEnabled=toggle.checked;
+  const slider=toggle.nextElementSibling;
+  const circle=slider.nextElementSibling;
+  if(bgEffectEnabled){
+    slider.style.background='#22c55e';
+    circle.style.transform='translateX(30px)';
+    showMessage('背景ON');
+  }else{
+    slider.style.background='#ccc';
+    circle.style.transform='translateX(0)';
+    showMessage('背景OFF');
+  }
+}
+
+function updateBgOpacity(value){
+  bgEffectOpacity=parseFloat(value);
+  document.getElementById('bgOpacityValue').textContent=Math.round(value*100)+'%';
+}
+
+function clearBgEffect(){
+  bgEffectImage=null;
+  bgEffectEnabled=false;
+  const toggle=document.getElementById('bgEffectToggle');
+  toggle.checked=false;
+  const slider=toggle.nextElementSibling;
+  const circle=slider.nextElementSibling;
+  slider.style.background='#ccc';
+  circle.style.transform='translateX(0)';
+  const preview=document.getElementById('bgPreview');
+  preview.innerHTML='<span style="color:#fff;font-size:0.9rem">画像なし</span>';
+  preview.style.background='rgba(255,255,255,0.1)';
+  showMessage('画像を削除しました');
+}
+
 let bgmAudio=null;
 let currentBGM='none';
 
@@ -1643,7 +1760,13 @@ function toggleBGM(bgmName){
     bgmAudio.pause();
     bgmAudio.currentTime=0;
     currentBGM='none';
-    if(toggle)toggle.checked=false;
+    if(toggle){
+      toggle.checked=false;
+      const slider=toggle.nextElementSibling;
+      const circle=slider.nextElementSibling;
+      slider.style.background='#ccc';
+      circle.style.transform='translateX(0)';
+    }
     if(bgmToggleBtn){
       bgmToggleBtn.style.background='linear-gradient(135deg,#3b82f6,#60a5fa)';
     }
@@ -1659,7 +1782,13 @@ function toggleBGM(bgmName){
     bgmAudio.play().then(()=>{
       currentBGM=bgmName;
       setupMediaSession();
-      if(toggle)toggle.checked=true;
+      if(toggle){
+        toggle.checked=true;
+        const slider=toggle.nextElementSibling;
+        const circle=slider.nextElementSibling;
+        slider.style.background='#22c55e';
+        circle.style.transform='translateX(30px)';
+      }
       if(bgmToggleBtn){
         bgmToggleBtn.style.background='linear-gradient(135deg,#ff4757,#ff6b81)';
       }
@@ -1796,6 +1925,43 @@ function closeSharePreview(){
 async function executeShare(){
   await shareToXWithImage();
   closeSharePreview();
+}
+
+function showXSharePreview(){
+  const canvas=generateResultImage();
+  const previewCanvas=document.getElementById('xSharePreviewCanvas');
+  previewCanvas.width=canvas.width;
+  previewCanvas.height=canvas.height;
+  const ctx=previewCanvas.getContext('2d');
+  ctx.drawImage(canvas,0,0);
+  
+  const stage=currentStage;
+  const squats=totalSquats;
+  const pattern=document.getElementById('sharePattern').value;
+  let text='';
+  if(pattern==='1'){
+    text='\u30b9\u30af\u30ef\u30c3\u30c8'+squats+'\u56de\u3084\u3063\u305f\u3089\n\u30b9\u30c6\u30fc\u30b8'+stage+'\u307e\u3067\u884c\u3051\u305f\ud83d\udd25\n\u660e\u65e5\u306e\u81ea\u5206\u304c\u697d\u3057\u307f\n#AI\u7b4b\u30c8\u30ecRPG';
+  }else if(pattern==='2'){
+    text='\u30b9\u30c6\u30fc\u30b8'+stage+'\u3067\u8db3\u304c\u9650\u754c\ud83d\ude02\n\u30b9\u30af\u30ef\u30c3\u30c8'+squats+'\u56de...\u307e\u3060\u3044\u3051\u308b\uff01\n#AI\u7b4b\u30c8\u30ecRPG';
+  }else{
+    text='\u3010\u901f\u5831\u3011\u30b9\u30c6\u30fc\u30b8'+stage+'\u30af\u30ea\u30a2\n\u30b9\u30af\u30ef\u30c3\u30c8'+squats+'\u56de\u3067\u6483\u7834\ud83c\udfae\n\u3053\u306e\u30b2\u30fc\u30e0\u3001\u7b4b\u8089\u75db\u4e0d\u53ef\u907f\n#AI\u7b4b\u30c8\u30ecRPG';
+  }
+  document.getElementById('xSharePreviewText').textContent=text;
+  document.getElementById('xSharePreviewModal').style.display='flex';
+}
+
+function closeXSharePreview(){
+  document.getElementById('xSharePreviewModal').style.display='none';
+}
+
+function executeXShare(){
+  shareToX();
+  const username=localStorage.getItem('username')||'guest';
+  let count=parseInt(localStorage.getItem('silverTreasureCount_'+username)||'0');
+  count++;
+  localStorage.setItem('silverTreasureCount_'+username,count);
+  showMessage('\u30b7\u30eb\u30d0\u30fc\u5b9d\u7bb1\u3092\u7372\u5f97\uff01');
+  closeXSharePreview();
 }
 
 if(navigator.share){
