@@ -7,7 +7,7 @@ let lastDate=new Date().toDateString();
 let faceDetected=false;
 let playerLevel=1,playerExp=0;
 let lastTreasureCheck=0;
-let playStartTime=0,playTimeInterval=null;
+let playStartTime=0,playTimeInterval=null,moneyInterval=null,currentMoney=0,moneyStartTime=0;
 
 function getExpForLevel(level){
   return Math.floor(10*Math.pow(1.5,level-1));
@@ -131,8 +131,6 @@ function showLevelUp(){
 }
 
 const enemyNames=["アイスモッチ","ゴブリン","コウモリ","オオカミ","パンプキンナイト","ゾンビ","オーク","トロール","ワイバーン","ミノタウロス","バンシー","ガーゴイル","ケルベロス","ヒドラ","キマイラ","グリフォン","マンティコア","バジリスク","クラーケン","フェンリル","ダークナイト","デスナイト","ブラッドロード","シャドウデーモン","フロストジャイアント","フレイムタイタン","ストームドレイク","ヴァンパイアロード","リッチキング","アビスウォーカー","カオスビースト","ヴォイドスピリット","ダークエンペラー","インフェルノデーモン","グレイシャルドラゴン","サンダーコロッサス","ネクロマンサー","デモンロード","エンシェントドラゴン","アポカリプスナイト","破壊神ベヒーモス","冥界王ハデス","魔神アスモデウス","終焉竜ニーズヘッグ","混沌神カオス","絶対神ゼウス","創造神ブラフマー","破滅神シヴァ","全知全能オーディン","究極神アルティメット"];
-const enemyMonsterImage=new Image();
-enemyMonsterImage.src='https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/アイスモッチ.png';
 const targetColors=["#90EE90","#8B4513","#4B0082","#696969","#F5F5DC","#556B2F","#8B0000","#2F4F4F","#9370DB","#8B4513","#E6E6FA","#708090","#8B0000","#006400","#FF4500","#DAA520","#8B008B","#228B22","#000080","#4B0082","#2F4F4F","#191970","#8B0000","#4B0082","#4682B4","#FF4500","#4169E1","#8B0000","#000000","#1C1C1C","#8B008B","#483D8B","#2F4F4F","#FF0000","#00CED1","#FFD700","#4B0082","#8B0000","#FF8C00","#000000","#8B4513","#4B0082","#8B0000","#006400","#4B0082","#FFD700","#FF4500","#8B0000","#0000CD","#FF00FF"];
 let currentEnemyIndex=0;
 
@@ -150,6 +148,16 @@ function startGame(){
   playStartTime=Date.now();
   if(playTimeInterval)clearInterval(playTimeInterval);
   playTimeInterval=setInterval(updatePlayTime,1000);
+  const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+  if(isLoggedIn){
+    currentMoney=parseInt(localStorage.getItem('money')||'0');
+    localStorage.setItem('moneyBase',currentMoney);
+    document.getElementById('moneyDisplay').style.display='block';
+    moneyStartTime=Date.now();
+    updateMoneyDisplay();
+    if(moneyInterval)clearInterval(moneyInterval);
+    moneyInterval=setInterval(updateMoney,50);
+  }
   drawActiveMonster();
   updateUI();
   setupCameraAndModel();
@@ -205,6 +213,10 @@ function updateUI(){
     lastDate=today;
     localStorage.setItem('dailyTotal',0);
     localStorage.setItem('lastDate',today);
+    const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+    if(isLoggedIn){
+      saveUserProgress();
+    }
   }
   const goal=getStageGoal(currentStage);
   const remaining=Math.max(0,goal-score);
@@ -216,21 +228,23 @@ function updateUI(){
   document.getElementById('targetHpFill').style.background=`linear-gradient(to right,${targetColors[colorIdx]},${targetColors[(colorIdx+1)%targetColors.length]})`;
   document.getElementById('stageInfo').textContent=`ステージ ${currentStage}`;
   document.getElementById('targetHpText').textContent=`HP ${remaining}/${goal}`;
-  const enemyImg=document.getElementById('enemyImage');
   const enemyNameEl=document.getElementById('targetName');
-  if(nameIdx===0&&enemyMonsterImage.complete){
-    enemyImg.src=enemyMonsterImage.src;
-    enemyImg.style.display='block';
-    enemyImg.style.width='80px';
-    enemyImg.style.height='80px';
-    enemyImg.style.objectFit='contain';
-    enemyImg.style.margin='0 auto 5px';
-    enemyNameEl.textContent=enemyNames[nameIdx];
+  enemyNameEl.textContent=enemyNames[nameIdx];
+  if(nameIdx===0){
     enemyNameEl.style.fontSize='0.9rem';
+    const enemyImg=document.getElementById('enemyImage');
+    if(enemyImg){
+      enemyImg.src='https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/アイスモッチ.png';
+      enemyImg.style.display='block';
+      enemyImg.style.width='80px';
+      enemyImg.style.height='80px';
+      enemyImg.style.objectFit='contain';
+      enemyImg.style.margin='0 auto 5px';
+    }
   }else{
-    enemyImg.style.display='none';
-    enemyNameEl.textContent=enemyNames[nameIdx];
     enemyNameEl.style.fontSize='1.2rem';
+    const enemyImg=document.getElementById('enemyImage');
+    if(enemyImg)enemyImg.style.display='none';
   }
   const currentCountEl=document.getElementById('currentCount');
   const todayCountEl=document.getElementById('todayCount');
@@ -287,6 +301,14 @@ function handleStageClear(){
   
   setTimeout(()=>{
     currentStage++;
+    const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+    if(isLoggedIn){
+      const username=localStorage.getItem('username')||'guest';
+      const maxStage=parseInt(localStorage.getItem('maxStage_'+username)||'1');
+      if(currentStage>maxStage){
+        localStorage.setItem('maxStage_'+username,currentStage);
+      }
+    }
     score=0;
     currentEnemyIndex=(currentStage-1)%enemyNames.length;
     ec.style.opacity=1;
@@ -481,25 +503,50 @@ function shareToX(){
   window.open(shareUrl,'_blank','width=550,height=420');
 }
 
-function generateResultImage(){
+async function generateResultImage(){
   const canvas=document.createElement('canvas');
   canvas.width=800;
   canvas.height=600;
   const ctx=canvas.getContext('2d');
   
-  const gradient=ctx.createLinearGradient(0,0,800,600);
-  gradient.addColorStop(0,'#1e3a8a');
-  gradient.addColorStop(0.5,'#0891b2');
-  gradient.addColorStop(1,'#22d3ee');
-  ctx.fillStyle=gradient;
-  ctx.fillRect(0,0,800,600);
+  const activeMonster=localStorage.getItem('activeMonster')||'slime';
+  const monsterInfo=monsterTypes.find(m=>m.id===activeMonster);
+  
+  if(monsterInfo&&monsterInfo.image){
+    try{
+      const img=new Image();
+      img.crossOrigin='anonymous';
+      await new Promise((resolve,reject)=>{
+        img.onload=resolve;
+        img.onerror=reject;
+        img.src=monsterInfo.image;
+      });
+      ctx.drawImage(img,0,0,800,600);
+      ctx.fillStyle='rgba(0,0,0,0.5)';
+      ctx.fillRect(0,0,800,600);
+    }catch(e){
+      const gradient=ctx.createLinearGradient(0,0,800,600);
+      gradient.addColorStop(0,'#1e3a8a');
+      gradient.addColorStop(0.5,'#0891b2');
+      gradient.addColorStop(1,'#22d3ee');
+      ctx.fillStyle=gradient;
+      ctx.fillRect(0,0,800,600);
+    }
+  }else{
+    const gradient=ctx.createLinearGradient(0,0,800,600);
+    gradient.addColorStop(0,'#1e3a8a');
+    gradient.addColorStop(0.5,'#0891b2');
+    gradient.addColorStop(1,'#22d3ee');
+    ctx.fillStyle=gradient;
+    ctx.fillRect(0,0,800,600);
+  }
   
   ctx.fillStyle='#fff';
   ctx.font='bold 60px Arial';
   ctx.textAlign='center';
   ctx.fillText('AI筋トレRPG',400,80);
   
-  ctx.fillStyle='rgba(255,255,255,0.95)';
+  ctx.fillStyle='rgba(255,255,255,0.85)';
   ctx.fillRect(100,120,600,400);
   
   ctx.fillStyle='#0891b2';
@@ -536,19 +583,27 @@ async function shareToXWithImage(){
     text='\u3010\u901f\u5831\u3011\u30b9\u30c6\u30fc\u30b8'+stage+'\u30af\u30ea\u30a2\n\u30b9\u30af\u30ef\u30c3\u30c8'+squats+'\u56de\u3067\u6483\u7834\ud83c\udfae\n\u3053\u306e\u30b2\u30fc\u30e0\u3001\u7b4b\u8089\u75db\u4e0d\u53ef\u907f\n#AI\u7b4b\u30c8\u30ecRPG';
   }
   
-  if(navigator.share&&navigator.canShare){
+  if(navigator.share){
     try{
       const canvas=generateResultImage();
       const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
-      const file=new File([blob],'result.png',{type:'image/png'});
+      const file=new File([blob],'ai-kintore-result.png',{type:'image/png'});
       
-      if(navigator.canShare({files:[file]})){
+      if(navigator.canShare&&navigator.canShare({files:[file]})){
         await navigator.share({text:text,files:[file]});
         const username=localStorage.getItem('username')||'guest';
-        let count=parseInt(localStorage.getItem('goldTreasureCount_'+username)||'0');
+        let count=parseInt(localStorage.getItem('silverTreasureCount_'+username)||'0');
         count++;
-        localStorage.setItem('goldTreasureCount_'+username,count);
-        showMessage('\u30b4\u30fc\u30eb\u30c9\u5b9d\u7bb1\u3092\u7372\u5f97\uff01');
+        localStorage.setItem('silverTreasureCount_'+username,count);
+        showMessage('\u30b7\u30eb\u30d0\u30fc\u5b9d\u7bb1\u3092\u7372\u5f97\uff01');
+        return;
+      }else{
+        await navigator.share({text:text});
+        const username=localStorage.getItem('username')||'guest';
+        let count=parseInt(localStorage.getItem('silverTreasureCount_'+username)||'0');
+        count++;
+        localStorage.setItem('silverTreasureCount_'+username,count);
+        showMessage('\u30b7\u30eb\u30d0\u30fc\u5b9d\u7bb1\u3092\u7372\u5f97\uff01');
         return;
       }
     }catch(e){
@@ -556,7 +611,13 @@ async function shareToXWithImage(){
     }
   }
   
-  shareToX();
+  const shareUrl='https://twitter.com/intent/tweet?text='+encodeURIComponent(text);
+  window.open(shareUrl,'_blank','width=550,height=420');
+  const username=localStorage.getItem('username')||'guest';
+  let count=parseInt(localStorage.getItem('silverTreasureCount_'+username)||'0');
+  count++;
+  localStorage.setItem('silverTreasureCount_'+username,count);
+  showMessage('\u30b7\u30eb\u30d0\u30fc\u5b9d\u7bb1\u3092\u7372\u5f97\uff01');
 }
 
 let isSaving=false;
@@ -650,17 +711,37 @@ loginButton.style.display=isLoggedIn?'none':'block';
 startScreen.style.display='flex';
 }
 
+function useTicket(){
+const username=localStorage.getItem('username')||'guest';
+let tickets=parseInt(localStorage.getItem('stageTicket_'+username)||'0');
+const maxStage=parseInt(localStorage.getItem('maxStage_'+username)||'1');
+if(tickets<=0){
+showMessage('チケットがありません');
+return;
+}
+tickets--;
+localStorage.setItem('stageTicket_'+username,tickets);
+currentStage=maxStage;
+score=0;
+startGame();
+showMessage('ステージ'+maxStage+'から開始！');
+}
+
 function backToTitle(){
   const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
   if(isLoggedIn){
+    localStorage.setItem('money',currentMoney);
     saveUserProgress();
   }
   totalSquats=0;
   restartGame(false);
   document.getElementById('gameOverModal').style.display='none';
   if(playTimeInterval)clearInterval(playTimeInterval);
+  if(moneyInterval)clearInterval(moneyInterval);
   playStartTime=0;
+  moneyStartTime=0;
   document.getElementById('playTime').textContent='00:00';
+  document.getElementById('moneyDisplay').style.display='none';
   
   const logoutBtn=document.getElementById('logoutBtn');
   if(logoutBtn)logoutBtn.style.display=isLoggedIn?'block':'none';
@@ -1004,17 +1085,21 @@ function drawActiveMonster(){
 function updateTreasureProgress(){}
 
 function checkTreasureDrop(){
-  const dropRate=Math.min(10+currentStage*2,90);
   const rand=Math.random()*100;
-  if(rand<dropRate){
-    let type='bronze';
-    let rates={bronze:80,silver:0,gold:0};
-    if(currentStage>=10)rates.silver=15;
-    if(currentStage>=30)rates.gold=5;
-    const typeRand=Math.random()*100;
-    if(currentStage>=30&&typeRand<rates.gold)type='gold';
-    else if(currentStage>=10&&typeRand<rates.gold+rates.silver)type='silver';
-    
+  let type=null;
+  
+  if(currentStage<10){
+    if(rand<20)type='bronze';
+  }else if(currentStage<30){
+    if(rand<8)type='silver';
+    else if(rand<28)type='bronze';
+  }else{
+    if(rand<2)type='gold';
+    else if(rand<10)type='silver';
+    else if(rand<30)type='bronze';
+  }
+  
+  if(type){
     const dropText=document.getElementById('treasureDropText');
     if(dropText){
       const colors={bronze:'#CD7F32',silver:'#C0C0C0',gold:'#FFD700'};
@@ -1027,22 +1112,302 @@ function checkTreasureDrop(){
     }
     const username=localStorage.getItem('username')||'guest';
     let count=parseInt(localStorage.getItem(type+'TreasureCount_'+username)||'0');
-    count++;
-    localStorage.setItem(type+'TreasureCount_'+username,count);
+    if(count<999){
+      count++;
+      localStorage.setItem(type+'TreasureCount_'+username,count);
+    }
   }
 }
 
 function openItems(){
+  if(moneyInterval){
+    clearInterval(moneyInterval);
+    moneyInterval=null;
+    localStorage.setItem('money',currentMoney);
+  }
   const username=localStorage.getItem('username')||'guest';
-  document.getElementById('bronzeTreasureCount').textContent=localStorage.getItem('bronzeTreasureCount_'+username)||'0';
-  document.getElementById('silverTreasureCount').textContent=localStorage.getItem('silverTreasureCount_'+username)||'0';
-  document.getElementById('goldTreasureCount').textContent=localStorage.getItem('goldTreasureCount_'+username)||'0';
+  const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+  const bronze=localStorage.getItem('bronzeTreasureCount_'+username)||'0';
+  const silver=localStorage.getItem('silverTreasureCount_'+username)||'0';
+  const gold=localStorage.getItem('goldTreasureCount_'+username)||'0';
+  document.getElementById('bronzeTreasureCount').textContent=bronze;
+  document.getElementById('silverTreasureCount').textContent=silver;
+  document.getElementById('goldTreasureCount').textContent=gold;
+  const treasureTabBtn=document.getElementById('tabTreasure');
+  const ticketTabBtn=document.getElementById('tabTicket');
+  if(treasureTabBtn)treasureTabBtn.style.display=isLoggedIn?'block':'none';
+  if(ticketTabBtn)ticketTabBtn.style.display=isLoggedIn?'block':'none';
+  showItemTab('gacha');
   document.getElementById('itemModal').style.display='flex';
   document.getElementById('gachaModal').style.display='none';
 }
 
+function useTicketFromShop(){
+  const username=localStorage.getItem('username')||'guest';
+  let tickets=parseInt(localStorage.getItem('stageTicket_'+username)||'0');
+  const maxStage=parseInt(localStorage.getItem('maxStage_'+username)||'1');
+  if(tickets<=0){
+    showMessage('チケットがありません');
+    return;
+  }
+  if(maxStage<=1){
+    showMessage('最大ステージが1です');
+    return;
+  }
+  tickets--;
+  localStorage.setItem('stageTicket_'+username,tickets);
+  currentStage=maxStage;
+  score=0;
+  closeItemModal();
+  document.getElementById('startScreen').style.display='none';
+  startGame();
+  showMessage('ステージ'+maxStage+'から開始！');
+}
+
+function showItemTab(tab){
+  const username=localStorage.getItem('username')||'guest';
+  document.getElementById('gachaTab').style.display=tab==='gacha'?'block':'none';
+  document.getElementById('treasureTab').style.display=tab==='treasure'?'block':'none';
+  document.getElementById('ticketTab').style.display=tab==='ticket'?'block':'none';
+  document.getElementById('tabGacha').style.background=tab==='gacha'?'#3b82f6':'rgba(255,255,255,0.2)';
+  document.getElementById('tabTreasure').style.background=tab==='treasure'?'#3b82f6':'rgba(255,255,255,0.2)';
+  document.getElementById('tabTicket').style.background=tab==='ticket'?'#3b82f6':'rgba(255,255,255,0.2)';
+  if(tab==='gacha'){
+    const b=localStorage.getItem('bronzeTreasureCount_'+username)||'0';
+    const s=localStorage.getItem('silverTreasureCount_'+username)||'0';
+    const g=localStorage.getItem('goldTreasureCount_'+username)||'0';
+    document.getElementById('bronzeTreasureCount').textContent=b;
+    document.getElementById('silverTreasureCount').textContent=s;
+    document.getElementById('goldTreasureCount').textContent=g;
+  }
+  if(tab==='treasure'){
+    currentMoney=parseInt(localStorage.getItem('money')||'0');
+    document.getElementById('shopMoney').textContent=currentMoney.toLocaleString();
+    const b=localStorage.getItem('bronzeTreasureCount_'+username)||'0';
+    const s=localStorage.getItem('silverTreasureCount_'+username)||'0';
+    const g=localStorage.getItem('goldTreasureCount_'+username)||'0';
+    document.getElementById('buyBronzeCount').textContent=b;
+    document.getElementById('buySilverCount').textContent=s;
+    document.getElementById('buyGoldCount').textContent=g;
+    document.getElementById('sellBronzeCount').textContent=b;
+    document.getElementById('sellSilverCount').textContent=s;
+    document.getElementById('sellGoldCount').textContent=g;
+  }
+  if(tab==='ticket'){
+    document.getElementById('shopMoney2').textContent=currentMoney.toLocaleString();
+    const tickets=parseInt(localStorage.getItem('stageTicket_'+username)||'0');
+    const selectTickets=parseInt(localStorage.getItem('selectTicket_'+username)||'0');
+    const maxStage=parseInt(localStorage.getItem('maxStage_'+username)||'1');
+    document.getElementById('ticketCount').textContent=tickets;
+    document.getElementById('selectTicketCount').textContent=selectTickets;
+    document.getElementById('maxStageDisplay').textContent=maxStage;
+    document.getElementById('maxStageDisplay2').textContent=maxStage;
+    const useBtn=document.getElementById('useTicketInShop');
+    const useSelectBtn=document.getElementById('useSelectTicketInShop');
+    if(useBtn)useBtn.style.display=(tickets>0&&maxStage>1)?'block':'none';
+    if(useSelectBtn)useSelectBtn.style.display=(selectTickets>0&&maxStage>1)?'block':'none';
+  }
+}
+
+function buyTicket(){
+  const price=500000;
+  if(currentMoney<price){
+    showMessage('所持金が不足しています');
+    return;
+  }
+  const username=localStorage.getItem('username')||'guest';
+  let tickets=parseInt(localStorage.getItem('stageTicket_'+username)||'0');
+  currentMoney-=price;
+  tickets++;
+  localStorage.setItem('money',currentMoney);
+  localStorage.setItem('stageTicket_'+username,tickets);
+  updateMoneyDisplay();
+  showItemTab('ticket');
+  showMessage('最大ステージチケットを購入しました！');
+}
+
+function buySelectTicket(){
+  const price=1000000;
+  if(currentMoney<price){
+    showMessage('所持金が不足しています');
+    return;
+  }
+  const username=localStorage.getItem('username')||'guest';
+  let tickets=parseInt(localStorage.getItem('selectTicket_'+username)||'0');
+  currentMoney-=price;
+  tickets++;
+  localStorage.setItem('money',currentMoney);
+  localStorage.setItem('selectTicket_'+username,tickets);
+  updateMoneyDisplay();
+  showItemTab('ticket');
+  showMessage('ステージ選択チケットを購入しました！');
+}
+
+function useSelectTicketFromShop(){
+  const username=localStorage.getItem('username')||'guest';
+  let tickets=parseInt(localStorage.getItem('selectTicket_'+username)||'0');
+  const maxStage=parseInt(localStorage.getItem('maxStage_'+username)||'1');
+  if(tickets<=0){
+    showMessage('チケットがありません');
+    return;
+  }
+  if(maxStage<=1){
+    showMessage('最大ステージが1です');
+    return;
+  }
+  const modal=document.createElement('div');
+  modal.style.position='fixed';
+  modal.style.inset='0';
+  modal.style.background='rgba(0,0,0,0.9)';
+  modal.style.zIndex='10001';
+  modal.style.display='flex';
+  modal.style.alignItems='center';
+  modal.style.justifyContent='center';
+  const box=document.createElement('div');
+  box.style.background='linear-gradient(135deg,#1e3a8a,#06b6d4)';
+  box.style.padding='30px';
+  box.style.borderRadius='20px';
+  box.style.textAlign='center';
+  box.style.maxWidth='400px';
+  box.style.width='90%';
+  box.innerHTML='<h3 style="color:#fff;margin:0 0 20px 0">開始ステージを選択</h3>';
+  const input=document.createElement('input');
+  input.type='number';
+  input.min='1';
+  input.max=maxStage;
+  input.value=maxStage;
+  input.style.width='100%';
+  input.style.padding='12px';
+  input.style.fontSize='1.2rem';
+  input.style.borderRadius='8px';
+  input.style.border='2px solid #06b6d4';
+  input.style.textAlign='center';
+  input.style.marginBottom='20px';
+  box.appendChild(input);
+  const info=document.createElement('div');
+  info.style.color='#fff';
+  info.style.fontSize='0.9rem';
+  info.style.marginBottom='20px';
+  info.textContent='ステージ1〜'+maxStage+'を選択できます';
+  box.appendChild(info);
+  const btnOk=document.createElement('button');
+  btnOk.textContent='開始';
+  btnOk.style.padding='12px 30px';
+  btnOk.style.fontSize='1.1rem';
+  btnOk.style.background='#22c55e';
+  btnOk.style.color='#fff';
+  btnOk.style.border='none';
+  btnOk.style.borderRadius='8px';
+  btnOk.style.cursor='pointer';
+  btnOk.style.margin='5px';
+  btnOk.onclick=function(){
+    const stage=parseInt(input.value);
+    if(stage<1||stage>maxStage){
+      showMessage('無効なステージです');
+      return;
+    }
+    tickets--;
+    localStorage.setItem('selectTicket_'+username,tickets);
+    currentStage=stage;
+    score=0;
+    document.body.removeChild(modal);
+    closeItemModal();
+    document.getElementById('startScreen').style.display='none';
+    startGame();
+    showMessage('ステージ'+stage+'から開始！');
+  };
+  const btnCancel=document.createElement('button');
+  btnCancel.textContent='キャンセル';
+  btnCancel.style.padding='12px 30px';
+  btnCancel.style.fontSize='1.1rem';
+  btnCancel.style.background='#999';
+  btnCancel.style.color='#fff';
+  btnCancel.style.border='none';
+  btnCancel.style.borderRadius='8px';
+  btnCancel.style.cursor='pointer';
+  btnCancel.style.margin='5px';
+  btnCancel.onclick=function(){
+    document.body.removeChild(modal);
+  };
+  box.appendChild(btnOk);
+  box.appendChild(btnCancel);
+  modal.appendChild(box);
+  document.body.appendChild(modal);
+}
+
+function buyTreasure(type){
+  const prices={bronze:10000,silver:100000,gold:1000000};
+  const price=prices[type];
+  if(currentMoney<price){
+    showMessage('所持金が不足しています');
+    return;
+  }
+  const username=localStorage.getItem('username')||'guest';
+  let count=parseInt(localStorage.getItem(type+'TreasureCount_'+username)||'0');
+  if(count>=999){
+    showMessage('宝箱は999個までしか持てません');
+    return;
+  }
+  currentMoney-=price;
+  count++;
+  localStorage.setItem('money',currentMoney);
+  localStorage.setItem('moneyBase',currentMoney);
+  localStorage.setItem(type+'TreasureCount_'+username,count);
+  document.getElementById('buy'+type.charAt(0).toUpperCase()+type.slice(1)+'Count').textContent=count;
+  document.getElementById('sell'+type.charAt(0).toUpperCase()+type.slice(1)+'Count').textContent=count;
+  document.getElementById('shopMoney').textContent=currentMoney.toLocaleString();
+  updateMoneyDisplay();
+  const el=document.getElementById('buy'+type.charAt(0).toUpperCase()+type.slice(1)+'Count');
+  el.style.transform='scale(1.5)';
+  el.style.color='#FFD700';
+  setTimeout(()=>{el.style.transform='scale(1)';el.style.color='';},300);
+  const names={bronze:'ブロンズ',silver:'シルバー',gold:'ゴールド'};
+  showMessage(names[type]+'宝箱を購入しました！');
+}
+
+function sellTreasure(type){
+  const username=localStorage.getItem('username')||'guest';
+  let count=parseInt(localStorage.getItem(type+'TreasureCount_'+username)||'0');
+  if(count<=0){
+    showMessage('売却する宝箱がありません');
+    return;
+  }
+  const prices={bronze:7000,silver:70000,gold:700000};
+  const price=prices[type];
+  if(currentMoney+price>99999999){
+    showMessage('所持金が上限を超えます');
+    return;
+  }
+  currentMoney+=price;
+  count--;
+  localStorage.setItem('money',currentMoney);
+  localStorage.setItem('moneyBase',currentMoney);
+  localStorage.setItem(type+'TreasureCount_'+username,count);
+  document.getElementById('sell'+type.charAt(0).toUpperCase()+type.slice(1)+'Count').textContent=count;
+  document.getElementById('buy'+type.charAt(0).toUpperCase()+type.slice(1)+'Count').textContent=count;
+  document.getElementById('shopMoney').textContent=currentMoney.toLocaleString();
+  updateMoneyDisplay();
+  const el=document.getElementById('sell'+type.charAt(0).toUpperCase()+type.slice(1)+'Count');
+  el.style.transform='scale(0.7)';
+  el.style.color='#FF6B6B';
+  setTimeout(()=>{el.style.transform='scale(1)';el.style.color='';},300);
+  const names={bronze:'ブロンズ',silver:'シルバー',gold:'ゴールド'};
+  showMessage(names[type]+'宝箱を売却しました！');
+}
+
 function closeItemModal(){
   document.getElementById('itemModal').style.display='none';
+  const username=localStorage.getItem('username')||'guest';
+  document.getElementById('bronzeTreasureCount').textContent=localStorage.getItem('bronzeTreasureCount_'+username)||'0';
+  document.getElementById('silverTreasureCount').textContent=localStorage.getItem('silverTreasureCount_'+username)||'0';
+  document.getElementById('goldTreasureCount').textContent=localStorage.getItem('goldTreasureCount_'+username)||'0';
+  const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+  if(isLoggedIn&&moneyStartTime&&!moneyInterval){
+    currentMoney=parseInt(localStorage.getItem('money')||'0');
+    localStorage.setItem('moneyBase',currentMoney);
+    moneyStartTime=Date.now();
+    moneyInterval=setInterval(updateMoney,50);
+  }
   setTimeout(function(){
     if(!isLooping&&detector&&isCameraOn){
       isLooping=true;
@@ -1221,6 +1586,7 @@ function showGachaResult(result){
     }
     resultIcon.style.display='block';
     document.getElementById('gachaButtons').style.display='block';
+    document.getElementById('gachaButtons').innerHTML='<button onclick="openTreasureBox(window.currentGachaType)" style="padding:12px 24px;background:#22c55e;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:5px;font-size:1rem">もう一度引く</button><button onclick="closeGachaModal()" style="padding:12px 24px;background:#f59e0b;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:5px;font-size:1rem">閉じる</button>';
   },500);
 }
 
@@ -1344,8 +1710,152 @@ function closeGachaModal(){
     }
   },100);
 }
+function confirmGacha10(type){
+  const msg=type==='bronze'?'ブロンズ宝箱10個を引きますか？':type==='silver'?'シルバー宝箱10個を引きますか？':'ゴールド宝箱10個を引きますか？';
+  showConfirm(msg,function(){
+    openTreasureBox10(type);
+  });
+}
+
+function openTreasureBox10(type){
+  const username=localStorage.getItem('username')||'guest';
+  let treasureCount=parseInt(localStorage.getItem(type+'TreasureCount_'+username)||'0');
+  if(treasureCount<10){
+    document.getElementById('resultText').textContent='宝箱が10個以上必要です';
+    document.getElementById('gachaModal').style.display='flex';
+    document.getElementById('resultIcon').style.display='none';
+    document.getElementById('rouletteContainer').style.display='none';
+    document.getElementById('gachaButtons').style.display='block';
+    return;
+  }
+  treasureCount-=10;
+  localStorage.setItem(type+'TreasureCount_'+username,treasureCount);
+  document.getElementById(type+'TreasureCount').textContent=treasureCount;
+  const items=treasureRates[type];
+  document.getElementById('itemModal').style.display='none';
+  document.getElementById('gachaModal').style.display='flex';
+  document.getElementById('resultIcon').style.display='none';
+  document.getElementById('resultIcon').innerHTML='';
+  document.getElementById('gachaButtons').style.display='none';
+  document.getElementById('resultText').textContent='ガチャ中...';
+  document.getElementById('rouletteContainer').style.display='none';
+  window.currentGachaType=type;
+  
+  let ownedMonsters=JSON.parse(localStorage.getItem('ownedMonsters')||'[{"id":"slime","level":1,"exp":0}]');
+  let results=[];
+  let newMonsters=[];
+  let missCount=0;
+  
+  for(let i=0;i<10;i++){
+    const rand=Math.random();
+    let result=items[items.length-1];
+    let cumulative=0;
+    for(let j=0;j<items.length;j++){
+      cumulative+=items[j].rate;
+      if(rand<cumulative){
+        result=items[j];
+        break;
+      }
+    }
+    if(result.name==='はずれ'){
+      missCount++;
+      results.push({type:'miss'});
+    }else{
+      let monster;
+      if(result.name==='レアモンスター'){
+        const rareMonsters=monsterTypes.filter(m=>m.rarity==='rare');
+        monster=rareMonsters[Math.floor(Math.random()*rareMonsters.length)];
+      }else{
+        const normalMonsters=monsterTypes.filter(m=>m.rarity==='normal');
+        monster=normalMonsters[Math.floor(Math.random()*normalMonsters.length)];
+      }
+      const isNew=!ownedMonsters.find(m=>m.id===monster.id);
+      if(isNew){
+        ownedMonsters.push({id:monster.id,level:1,exp:0});
+        newMonsters.push(monster);
+      }
+      results.push({type:result.name==='レアモンスター'?'rare':'normal',monster:monster,isNew:isNew});
+    }
+  }
+  localStorage.setItem('ownedMonsters',JSON.stringify(ownedMonsters));
+  
+  setTimeout(()=>{
+    document.getElementById('resultText').textContent='';
+    const resultDiv=document.createElement('div');
+    resultDiv.style.maxHeight='300px';
+    resultDiv.style.overflowY='auto';
+    resultDiv.style.display='grid';
+    resultDiv.style.gridTemplateColumns='repeat(auto-fill,minmax(70px,1fr))';
+    resultDiv.style.gap='8px';
+    resultDiv.style.padding='10px';
+    
+    results.forEach(item=>{
+      const div=document.createElement('div');
+      if(item.type==='miss'){
+        div.style.background='#666';
+        div.style.borderRadius='10px';
+        div.style.padding='8px';
+        div.style.textAlign='center';
+        div.style.border='2px solid #999';
+        div.innerHTML='<div style="font-size:2rem">❌</div><div style="color:#fff;font-size:0.6rem;margin-top:3px">はずれ</div>';
+      }else{
+        div.style.background=item.isNew?'linear-gradient(135deg,#FFD700,#FFA500)':'#f0f0f0';
+        div.style.borderRadius='10px';
+        div.style.padding='8px';
+        div.style.textAlign='center';
+        div.style.border=item.isNew?'3px solid #FF4500':'2px solid #ccc';
+        const canvas=document.createElement('canvas');
+        canvas.width=50;
+        canvas.height=50;
+        const ctx=canvas.getContext('2d');
+        drawMonster(ctx,item.monster.id,25,25,20);
+        div.appendChild(canvas);
+        const name=document.createElement('div');
+        name.textContent=item.monster.name;
+        name.style.fontSize='0.5rem';
+        name.style.fontWeight='bold';
+        name.style.color='#333';
+        name.style.marginTop='3px';
+        name.style.whiteSpace='nowrap';
+        name.style.overflow='hidden';
+        name.style.textOverflow='ellipsis';
+        div.appendChild(name);
+        if(item.isNew){
+          const badge=document.createElement('div');
+          badge.textContent='NEW!';
+          badge.style.fontSize='0.5rem';
+          badge.style.color='#FF0000';
+          badge.style.fontWeight='bold';
+          div.appendChild(badge);
+        }
+      }
+      resultDiv.appendChild(div);
+    });
+    
+    const resultIcon=document.getElementById('resultIcon');
+    resultIcon.innerHTML='';
+    resultIcon.appendChild(resultDiv);
+    resultIcon.style.display='block';
+    
+    const summaryText='10連結果\nモンスター: '+(10-missCount)+'体\nはずれ: '+missCount+'回\nNEW: '+newMonsters.length+'体';
+    document.getElementById('resultText').textContent=summaryText;
+    document.getElementById('gachaButtons').style.display='block';
+    const username=localStorage.getItem('username')||'guest';
+    const remaining=parseInt(localStorage.getItem(type+'TreasureCount_'+username)||'0');
+    if(remaining>=10){
+      document.getElementById('gachaButtons').innerHTML='<button onclick="openTreasureBox10(window.currentGachaType)" style="padding:12px 24px;background:#22c55e;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:5px;font-size:1rem">10連引く</button><button onclick="closeGachaModal()" style="padding:12px 24px;background:#f59e0b;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:5px;font-size:1rem">閉じる</button>';
+    }else{
+      document.getElementById('gachaButtons').innerHTML='<button onclick="closeGachaModal()" style="padding:12px 24px;background:#f59e0b;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:5px;font-size:1rem">閉じる</button>';
+    }
+  },800);
+}
 
 function openMonsters(){
+  if(moneyInterval){
+    clearInterval(moneyInterval);
+    moneyInterval=null;
+    localStorage.setItem('money',currentMoney);
+  }
   const ownedMonsters=JSON.parse(localStorage.getItem('ownedMonsters')||'[{"id":"slime","level":1,"exp":0}]');
   const activeMonster=localStorage.getItem('activeMonster')||'slime';
   const activeMonsterData=ownedMonsters.find(m=>m.id===activeMonster);
@@ -1488,6 +1998,13 @@ function openMonsters(){
 
 function closeMonsterModal(){
   document.getElementById('monsterModal').style.display='none';
+  const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+  if(isLoggedIn&&moneyStartTime&&!moneyInterval){
+    currentMoney=parseInt(localStorage.getItem('money')||'0');
+    localStorage.setItem('moneyBase',currentMoney);
+    moneyStartTime=Date.now();
+    moneyInterval=setInterval(updateMoney,50);
+  }
   setTimeout(function(){
     if(!isLooping&&detector&&isCameraOn){
       isLooping=true;
@@ -1506,12 +2023,24 @@ let bgEffectOpacity=0.7;
 let currentEffectTab='mask';
 
 function openEffects(){
+  if(moneyInterval){
+    clearInterval(moneyInterval);
+    moneyInterval=null;
+    localStorage.setItem('money',currentMoney);
+  }
   document.getElementById('effectsModal').style.display='flex';
   showEffectTab(currentEffectTab);
 }
 
 function closeEffectsModal(){
   document.getElementById('effectsModal').style.display='none';
+  const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+  if(isLoggedIn&&moneyStartTime&&!moneyInterval){
+    currentMoney=parseInt(localStorage.getItem('money')||'0');
+    localStorage.setItem('moneyBase',currentMoney);
+    moneyStartTime=Date.now();
+    moneyInterval=setInterval(updateMoney,50);
+  }
   setTimeout(function(){
     if(!isLooping&&detector&&isCameraOn){
       isLooping=true;
@@ -1536,7 +2065,7 @@ function switchEffectTab(direction){
 }
 
 function loadPresetMask(type){
-  const urls={'pumpkin':'https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/upscaled/PumpkinFace.png'};
+  const urls={'pumpkin':'https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/PumpkinFace.png','ninja':'https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/Ninja.png','orange':'https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/Orange.png'};
   const img=new Image();
   img.crossOrigin='anonymous';
   img.onload=function(){
@@ -1627,19 +2156,19 @@ function clearFaceMask(){
 
 
 function loadPresetBg(type){
-  const colors={'green':'#00ff00','blue':'#0080ff'};
-  const canvas=document.createElement('canvas');
-  canvas.width=100;
-  canvas.height=100;
-  const ctx=canvas.getContext('2d');
-  ctx.fillStyle=colors[type]||'#00ff00';
-  ctx.fillRect(0,0,100,100);
+  const urls={'scifi':'https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/Sci-Fi%20Home%20Gym.jpg','neon':'https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/Neon%20Energy.jpg','clean':'https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/Clean%20Focus%20Grid.jpg','gen1':'https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/Generated%20Image%20November%2016%2C%202025%20-%2011_11PM.png','gen2':'https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/Generated%20Image%20November%2016%2C%202025%20-%2011_11PM%20(1).png'};
   const img=new Image();
+  img.crossOrigin='anonymous';
   img.onload=function(){
     bgEffectImage=img;
     const preview=document.getElementById('bgPreview');
     preview.innerHTML='';
-    preview.style.background=colors[type]||'#00ff00';
+    const previewImg=document.createElement('img');
+    previewImg.src=urls[type];
+    previewImg.style.width='100%';
+    previewImg.style.height='100%';
+    previewImg.style.objectFit='cover';
+    preview.appendChild(previewImg);
     const toggle=document.getElementById('bgEffectToggle');
     toggle.checked=true;
     bgEffectEnabled=true;
@@ -1649,7 +2178,7 @@ function loadPresetBg(type){
     circle.style.transform='translateX(30px)';
     showMessage('背景を選択しました');
   };
-  img.src=canvas.toDataURL();
+  img.src=urls[type];
 }
 
 function loadBgEffect(event){
@@ -1872,10 +2401,16 @@ function checkDateChange(){
   const today=new Date().toDateString();
   const savedDate=localStorage.getItem('lastDate');
   if(today!==savedDate){
+    const username=localStorage.getItem('username')||'guest';
+    localStorage.setItem('totalPlayTime_'+username,0);
     dailyTotal=0;
     lastDate=today;
     localStorage.setItem('dailyTotal',0);
     localStorage.setItem('lastDate',today);
+    const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+    if(isLoggedIn){
+      saveUserProgress();
+    }
     updateUI();
   }
 }
@@ -1888,21 +2423,43 @@ function updatePlayTime(){
   document.getElementById('playTime').textContent=mins.toString().padStart(2,'0')+':'+secs.toString().padStart(2,'0');
 }
 
+function updateMoney(){
+  if(!moneyStartTime||document.hidden)return;
+  const elapsed=(Date.now()-moneyStartTime)/1000;
+  const baseMoney=parseInt(localStorage.getItem('moneyBase')||'0');
+  const newMoney=Math.min(baseMoney+Math.floor(elapsed*60),99999999);
+  currentMoney=newMoney;
+  updateMoneyDisplay();
+}
+
+function updateMoneyDisplay(){
+  document.getElementById('moneyAmount').textContent=currentMoney.toLocaleString();
+}
+
 setInterval(checkDateChange,60000);
 
 let missions={login:{completed:false,claimed:false},plays:{completed:false,claimed:false,current:0,target:100},time:{completed:false,claimed:false,current:0,target:600}};
 
-function loadMissions(){const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';if(!isLoggedIn){missions={login:{completed:true,claimed:false},plays:{completed:false,claimed:false,current:0,target:100},time:{completed:false,claimed:false,current:0,target:600}};return;}const loginClaimed=localStorage.getItem('loginClaimed')==='true';const playsClaimed=localStorage.getItem('playsClaimed')==='true';const timeClaimed=localStorage.getItem('timeClaimed')==='true';missions={login:{completed:true,claimed:loginClaimed},plays:{completed:false,claimed:playsClaimed,current:0,target:100},time:{completed:false,claimed:timeClaimed,current:0,target:600}};}
+function loadMissions(){const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';if(!isLoggedIn){missions={login:{completed:true,claimed:false},plays:{completed:false,claimed:false,current:0,target:100},time:{completed:false,claimed:false,current:0,target:600}};return;}const loginClaimed=localStorage.getItem('loginClaimed')==='true';const playsClaimed=localStorage.getItem('playsClaimed')==='true';const timeClaimed=localStorage.getItem('timeClaimed')==='true';missions={login:{completed:true,claimed:loginClaimed},plays:{completed:false,claimed:playsClaimed,current:0,target:100},time:{completed:false,claimed:timeClaimed,current:0,target:600}};const email=localStorage.getItem('userEmail');if(email){google.script.run.withSuccessHandler(function(result){if(result.success&&result.history){const username=localStorage.getItem('username')||'guest';localStorage.setItem('dailyHistory_'+username,JSON.stringify(result.history));}}).loadDailyHistory(email);}}
 
 function saveMissions(){const username=localStorage.getItem('username')||'guest';localStorage.setItem('missions_'+username,JSON.stringify(missions));}
 
-function updateMissionProgress(){missions.plays.current=dailyTotal;if(dailyTotal>=missions.plays.target)missions.plays.completed=true;const playTime=playStartTime?Math.floor((Date.now()-playStartTime)/1000):0;missions.time.current=playTime;if(playTime>=missions.time.target)missions.time.completed=true;saveMissions();}
+function updateMissionProgress(){missions.plays.current=dailyTotal;if(dailyTotal>=missions.plays.target)missions.plays.completed=true;const username=localStorage.getItem('username')||'guest';let totalPlayTime=parseInt(localStorage.getItem('totalPlayTime_'+username)||'0');const currentSessionTime=playStartTime?Math.floor((Date.now()-playStartTime)/1000):0;totalPlayTime+=currentSessionTime;localStorage.setItem('totalPlayTime_'+username,totalPlayTime);missions.time.current=totalPlayTime;if(totalPlayTime>=missions.time.target)missions.time.completed=true;saveMissions();}
 
-function openMissions(){const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';if(!isLoggedIn){showMessage('ログインが必要です');return;}updateMissionProgress();const list=document.getElementById('missionList');list.innerHTML='';const types={login:{name:'ログイン',reward:'ブロンズ×3'},plays:{name:'100回プレイ',reward:'シルバー×1'},time:{name:'10分プレイ',reward:'ゴールド×1'}};for(let key in missions){const m=missions[key];const t=types[key];const progress=m.current?`(${m.current}/${m.target})`:'';const status=m.claimed?'受取済':m.completed?'受取可能':'未達成';const div=document.createElement('div');div.style.background='rgba(255,255,255,0.1)';div.style.padding='15px';div.style.borderRadius='10px';div.style.border='2px solid '+(m.claimed?'#666':m.completed?'#10b981':'#999');div.innerHTML=`<div style="color:#fff;font-size:1.1rem;font-weight:bold;margin-bottom:5px">${t.name} ${progress}</div><div style="color:#fbbf24;font-size:0.9rem;margin-bottom:10px">報酬: ${t.reward}</div><div style="color:#fff;font-size:0.9rem">状態: ${status}</div>`;if(m.completed&&!m.claimed){const btn=document.createElement('button');btn.textContent='受け取る';btn.style.width='100%';btn.style.padding='10px';btn.style.background='#10b981';btn.style.color='#fff';btn.style.border='none';btn.style.borderRadius='8px';btn.style.cursor='pointer';btn.style.fontSize='1rem';btn.style.fontWeight='bold';btn.style.marginTop='10px';btn.onclick=()=>claimMission(key);div.appendChild(btn);}list.appendChild(div);}document.getElementById('missionModal').style.display='flex';}
+function saveDailyHistory(){const username=localStorage.getItem('username')||'guest';const now=new Date();const year=now.getFullYear();const month=now.getMonth()+1;const day=now.getDate();const today=year+'-'+(month<10?'0'+month:month)+'-'+(day<10?'0'+day:day);const history=JSON.parse(localStorage.getItem('dailyHistory_'+username)||'{}');history[today]=dailyTotal;localStorage.setItem('dailyHistory_'+username,JSON.stringify(history));}
 
-function claimMission(type){if(!missions[type].completed||missions[type].claimed)return;const username=localStorage.getItem('username')||'guest';const email=localStorage.getItem('userEmail');missions[type].claimed=true;localStorage.setItem(type+'Claimed','true');const rewards={login:{bronze:3},plays:{silver:1},time:{gold:1}};const reward=rewards[type];for(let key in reward){let count=parseInt(localStorage.getItem(key+'TreasureCount_'+username)||'0');count+=reward[key];localStorage.setItem(key+'TreasureCount_'+username,count);}showLoading('報酬受取中...');google.script.run.withSuccessHandler(function(){hideLoading();showMessage('報酬を獲得しました！');openMissions();}).withFailureHandler(function(){hideLoading();showMessage('報酬を獲得しました！');openMissions();}).saveMissionClaim(email,type);}
+let currentCalendarYear=new Date().getFullYear();
+let currentCalendarMonth=new Date().getMonth();
 
-function closeMissionModal(){document.getElementById('missionModal').style.display='none';setTimeout(function(){if(!isLooping&&detector&&isCameraOn){isLooping=true;loop();}},100);}
+function changeMonth(delta){currentCalendarMonth+=delta;if(currentCalendarMonth<0){currentCalendarMonth=11;currentCalendarYear--;}else if(currentCalendarMonth>11){currentCalendarMonth=0;currentCalendarYear++;}renderCalendar();}
+
+function renderCalendar(){const calendar=document.getElementById('calendar');const title=document.getElementById('calendarTitle');if(!calendar)return;const username=localStorage.getItem('username')||'guest';const email=localStorage.getItem('userEmail');const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';const cachedHistory=JSON.parse(localStorage.getItem('dailyHistory_'+username)||'{}');renderCalendarWithData(cachedHistory);if(isLoggedIn&&email){google.script.run.withSuccessHandler(function(result){if(result.success&&result.history){const mergedHistory=Object.assign({},result.history,cachedHistory);localStorage.setItem('dailyHistory_'+username,JSON.stringify(mergedHistory));renderCalendarWithData(mergedHistory);}}).loadDailyHistory(email);}}function renderCalendarWithData(history){const calendar=document.getElementById('calendar');const title=document.getElementById('calendarTitle');if(!calendar)return;calendar.innerHTML='';const year=currentCalendarYear;const month=currentCalendarMonth;const firstDay=new Date(year,month,1).getDay();const lastDate=new Date(year,month+1,0).getDate();if(title)title.textContent=year+'年'+(month+1)+'月';const days=['日','月','火','水','木','金','土'];days.forEach(d=>{const header=document.createElement('div');header.textContent=d;header.style.color='#fff';header.style.fontSize='0.8rem';header.style.fontWeight='bold';header.style.textAlign='center';header.style.padding='5px';calendar.appendChild(header);});for(let i=0;i<firstDay;i++){const empty=document.createElement('div');calendar.appendChild(empty);}for(let date=1;date<=lastDate;date++){const m=month+1;const d=date;const dateStr=year+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);const count=history[dateStr]||0;const cell=document.createElement('div');cell.style.background=count>0?'rgba(34,197,94,0.3)':'rgba(255,255,255,0.1)';cell.style.border='1px solid rgba(255,255,255,0.3)';cell.style.borderRadius='5px';cell.style.padding='8px 4px';cell.style.textAlign='center';cell.style.cursor='pointer';const dateEl=document.createElement('div');dateEl.textContent=date;dateEl.style.color='#fff';dateEl.style.fontSize='0.9rem';dateEl.style.fontWeight='bold';cell.appendChild(dateEl);if(count>0){const countEl=document.createElement('div');countEl.textContent=count+'回';countEl.style.color='#fff';countEl.style.fontSize='0.7rem';countEl.style.fontWeight='bold';countEl.style.marginTop='2px';countEl.style.textShadow='1px 1px 2px rgba(0,0,0,0.8)';cell.appendChild(countEl);}calendar.appendChild(cell);}}
+
+function openMissions(){if(moneyInterval){clearInterval(moneyInterval);moneyInterval=null;localStorage.setItem('money',currentMoney);}const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';if(!isLoggedIn){showMessage('ログインが必要です');return;}updateMissionProgress();const username=localStorage.getItem('username')||'guest';const email=localStorage.getItem('userEmail');const now=new Date();const year=now.getFullYear();const month=now.getMonth()+1;const day=now.getDate();const today=year+'-'+(month<10?'0'+month:month)+'-'+(day<10?'0'+day:day);const history=JSON.parse(localStorage.getItem('dailyHistory_'+username)||'{}');history[today]=dailyTotal;localStorage.setItem('dailyHistory_'+username,JSON.stringify(history));if(isLoggedIn&&email&&dailyTotal>0){google.script.run.saveDailyHistory(email,today,dailyTotal);}currentCalendarYear=new Date().getFullYear();currentCalendarMonth=new Date().getMonth();renderCalendar();const list=document.getElementById('missionList');list.innerHTML='';const types={login:{name:'ログイン',reward:'ブロンズ×3'},plays:{name:'100回プレイ',reward:'シルバー×1'},time:{name:'10分プレイ',reward:'ゴールド×1'}};for(let key in missions){const m=missions[key];const t=types[key];const progress=m.current?`(${m.current}/${m.target})`:'';const status=m.claimed?'受取済':m.completed?'受取可能':'未達成';const div=document.createElement('div');div.style.background='rgba(255,255,255,0.1)';div.style.padding='15px';div.style.borderRadius='10px';div.style.border='2px solid '+(m.claimed?'#666':m.completed?'#10b981':'#999');div.innerHTML=`<div style="color:#fff;font-size:1.1rem;font-weight:bold;margin-bottom:5px">${t.name} ${progress}</div><div style="color:#fbbf24;font-size:0.9rem;margin-bottom:10px">報酬: ${t.reward}</div><div style="color:#fff;font-size:0.9rem">状態: ${status}</div>`;if(m.completed&&!m.claimed){const btn=document.createElement('button');btn.textContent='受け取る';btn.style.width='100%';btn.style.padding='10px';btn.style.background='#10b981';btn.style.color='#fff';btn.style.border='none';btn.style.borderRadius='8px';btn.style.cursor='pointer';btn.style.fontSize='1rem';btn.style.fontWeight='bold';btn.style.marginTop='10px';btn.onclick=()=>claimMission(key);div.appendChild(btn);}list.appendChild(div);}document.getElementById('missionModal').style.display='flex';}
+
+function claimMission(type){if(!missions[type].completed||missions[type].claimed)return;const username=localStorage.getItem('username')||'guest';const email=localStorage.getItem('userEmail');missions[type].claimed=true;localStorage.setItem(type+'Claimed','true');const rewards={login:{bronze:3},plays:{silver:1},time:{gold:1}};const reward=rewards[type];for(let key in reward){let count=parseInt(localStorage.getItem(key+'TreasureCount_'+username)||'0');count=Math.min(count+reward[key],999);localStorage.setItem(key+'TreasureCount_'+username,count);}showLoading('報酬受取中...');google.script.run.withSuccessHandler(function(){hideLoading();showMessage('報酬を獲得しました！');openMissions();}).withFailureHandler(function(){hideLoading();showMessage('報酬を獲得しました！');openMissions();}).saveMissionClaim(email,type);}
+
+function closeMissionModal(){document.getElementById('missionModal').style.display='none';const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';if(isLoggedIn&&moneyStartTime&&!moneyInterval){currentMoney=parseInt(localStorage.getItem('money')||'0');localStorage.setItem('moneyBase',currentMoney);moneyStartTime=Date.now();moneyInterval=setInterval(updateMoney,50);}setTimeout(function(){if(!isLooping&&detector&&isCameraOn){isLooping=true;loop();}},100);}
 
 loadMissions();
 
@@ -1912,8 +2469,26 @@ window.addEventListener('pageshow',function(event){
   }
 });
 
-function showSharePreview(){
-  const canvas=generateResultImage();
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){
+    if(moneyInterval){
+      clearInterval(moneyInterval);
+      moneyInterval=null;
+      localStorage.setItem('money',currentMoney);
+    }
+  }else{
+    const isLoggedIn=localStorage.getItem('isLoggedIn')==='true';
+    if(isLoggedIn&&moneyStartTime&&!moneyInterval){
+      currentMoney=parseInt(localStorage.getItem('money')||'0');
+      localStorage.setItem('moneyBase',currentMoney);
+      moneyStartTime=Date.now();
+      moneyInterval=setInterval(updateMoney,50);
+    }
+  }
+});
+
+async function showSharePreview(){
+  const canvas=await generateResultImage();
   const previewCanvas=document.getElementById('sharePreviewCanvas');
   previewCanvas.width=canvas.width;
   previewCanvas.height=canvas.height;
@@ -1940,12 +2515,58 @@ function closeSharePreview(){
 }
 
 async function executeShare(){
-  await shareToXWithImage();
+  const stage=currentStage;
+  const squats=totalSquats;
+  const pattern=document.getElementById('sharePattern').value;
+  let text='';
+  if(pattern==='1'){
+    text='\u30b9\u30af\u30ef\u30c3\u30c8'+squats+'\u56de\u3084\u3063\u305f\u3089\n\u30b9\u30c6\u30fc\u30b8'+stage+'\u307e\u3067\u884c\u3051\u305f\ud83d\udd25\n\u660e\u65e5\u306e\u81ea\u5206\u304c\u697d\u3057\u307f\n#AI\u7b4b\u30c8\u30ecRPG';
+  }else if(pattern==='2'){
+    text='\u30b9\u30c6\u30fc\u30b8'+stage+'\u3067\u8db3\u304c\u9650\u754c\ud83d\ude02\n\u30b9\u30af\u30ef\u30c3\u30c8'+squats+'\u56de...\u307e\u3060\u3044\u3051\u308b\uff01\n#AI\u7b4b\u30c8\u30ecRPG';
+  }else{
+    text='\u3010\u901f\u5831\u3011\u30b9\u30c6\u30fc\u30b8'+stage+'\u30af\u30ea\u30a2\n\u30b9\u30af\u30ef\u30c3\u30c8'+squats+'\u56de\u3067\u6483\u7834\ud83c\udfae\n\u3053\u306e\u30b2\u30fc\u30e0\u3001\u7b4b\u8089\u75db\u4e0d\u53ef\u907f\n#AI\u7b4b\u30c8\u30ecRPG';
+  }
+  
+  if(navigator.share){
+    try{
+      const canvas=await generateResultImage();
+      canvas.toBlob(async function(blob){
+        if(blob){
+          const file=new File([blob],'ai-kintore-result.png',{type:'image/png'});
+          if(navigator.canShare&&navigator.canShare({files:[file]})){
+            await navigator.share({text:text,files:[file]});
+          }else{
+            await navigator.share({text:text});
+          }
+        }else{
+          await navigator.share({text:text});
+        }
+        const username=localStorage.getItem('username')||'guest';
+        let count=parseInt(localStorage.getItem('silverTreasureCount_'+username)||'0');
+        count++;
+        localStorage.setItem('silverTreasureCount_'+username,count);
+        showMessage('\u30b7\u30eb\u30d0\u30fc\u5b9d\u7bb1\u3092\u7372\u5f97\uff01');
+        closeSharePreview();
+      },'image/png');
+      return;
+    }catch(e){
+      console.log('Share failed:',e);
+      await navigator.share({text:text});
+      const username=localStorage.getItem('username')||'guest';
+      let count=parseInt(localStorage.getItem('silverTreasureCount_'+username)||'0');
+      count++;
+      localStorage.setItem('silverTreasureCount_'+username,count);
+      showMessage('\u30b7\u30eb\u30d0\u30fc\u5b9d\u7bb1\u3092\u7372\u5f97\uff01');
+      closeSharePreview();
+    }
+  }
+  
+  showMessage('Web Share APIが利用できません');
   closeSharePreview();
 }
 
-function showXSharePreview(){
-  const canvas=generateResultImage();
+async function showXSharePreview(){
+  const canvas=await generateResultImage();
   const previewCanvas=document.getElementById('xSharePreviewCanvas');
   previewCanvas.width=canvas.width;
   previewCanvas.height=canvas.height;
