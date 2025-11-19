@@ -130,7 +130,9 @@ function showLevelUp(){
   },1500);
 }
 
-const enemyNames=["スライム","ゴブリン","コウモリ","オオカミ","パンプキンナイト","ゾンビ","オーク","トロール","ワイバーン","ミノタウロス","バンシー","ガーゴイル","ケルベロス","ヒドラ","キマイラ","グリフォン","マンティコア","バジリスク","クラーケン","フェンリル","ダークナイト","デスナイト","ブラッドロード","シャドウデーモン","フロストジャイアント","フレイムタイタン","ストームドレイク","ヴァンパイアロード","リッチキング","アビスウォーカー","カオスビースト","ヴォイドスピリット","ダークエンペラー","インフェルノデーモン","グレイシャルドラゴン","サンダーコロッサス","ネクロマンサー","デモンロード","エンシェントドラゴン","アポカリプスナイト","破壊神ベヒーモス","冥界王ハデス","魔神アスモデウス","終焉竜ニーズヘッグ","混沌神カオス","絶対神ゼウス","創造神ブラフマー","破滅神シヴァ","全知全能オーディン","究極神アルティメット"];
+const enemyNames=["アイスモッチ","ゴブリン","コウモリ","オオカミ","パンプキンナイト","ゾンビ","オーク","トロール","ワイバーン","ミノタウロス","バンシー","ガーゴイル","ケルベロス","ヒドラ","キマイラ","グリフォン","マンティコア","バジリスク","クラーケン","フェンリル","ダークナイト","デスナイト","ブラッドロード","シャドウデーモン","フロストジャイアント","フレイムタイタン","ストームドレイク","ヴァンパイアロード","リッチキング","アビスウォーカー","カオスビースト","ヴォイドスピリット","ダークエンペラー","インフェルノデーモン","グレイシャルドラゴン","サンダーコロッサス","ネクロマンサー","デモンロード","エンシェントドラゴン","アポカリプスナイト","破壊神ベヒーモス","冥界王ハデス","魔神アスモデウス","終焉竜ニーズヘッグ","混沌神カオス","絶対神ゼウス","創造神ブラフマー","破滅神シヴァ","全知全能オーディン","究極神アルティメット"];
+const enemyMonsterImage=new Image();
+enemyMonsterImage.src='https://raw.githubusercontent.com/mameogalaxy/mameofactory/master/text-formatter-gas/images/original/アイスモッチ.png';
 const targetColors=["#90EE90","#8B4513","#4B0082","#696969","#F5F5DC","#556B2F","#8B0000","#2F4F4F","#9370DB","#8B4513","#E6E6FA","#708090","#8B0000","#006400","#FF4500","#DAA520","#8B008B","#228B22","#000080","#4B0082","#2F4F4F","#191970","#8B0000","#4B0082","#4682B4","#FF4500","#4169E1","#8B0000","#000000","#1C1C1C","#8B008B","#483D8B","#2F4F4F","#FF0000","#00CED1","#FFD700","#4B0082","#8B0000","#FF8C00","#000000","#8B4513","#4B0082","#8B0000","#006400","#4B0082","#FFD700","#FF4500","#8B0000","#0000CD","#FF00FF"];
 let currentEnemyIndex=0;
 
@@ -214,7 +216,22 @@ function updateUI(){
   document.getElementById('targetHpFill').style.background=`linear-gradient(to right,${targetColors[colorIdx]},${targetColors[(colorIdx+1)%targetColors.length]})`;
   document.getElementById('stageInfo').textContent=`ステージ ${currentStage}`;
   document.getElementById('targetHpText').textContent=`HP ${remaining}/${goal}`;
-  document.getElementById('targetName').textContent=enemyNames[nameIdx];
+  const enemyImg=document.getElementById('enemyImage');
+  const enemyNameEl=document.getElementById('targetName');
+  if(nameIdx===0&&enemyMonsterImage.complete){
+    enemyImg.src=enemyMonsterImage.src;
+    enemyImg.style.display='block';
+    enemyImg.style.width='80px';
+    enemyImg.style.height='80px';
+    enemyImg.style.objectFit='contain';
+    enemyImg.style.margin='0 auto 5px';
+    enemyNameEl.textContent=enemyNames[nameIdx];
+    enemyNameEl.style.fontSize='0.9rem';
+  }else{
+    enemyImg.style.display='none';
+    enemyNameEl.textContent=enemyNames[nameIdx];
+    enemyNameEl.style.fontSize='1.2rem';
+  }
   const currentCountEl=document.getElementById('currentCount');
   const todayCountEl=document.getElementById('todayCount');
   const totalCountEl=document.getElementById('totalCount');
