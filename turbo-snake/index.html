@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SNAKE DUNGEON - Rogue-like RPG</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --ui-bg: #111;
+            --ui-border: #333;
+            --primary: #ff4d4d;
+            --secondary: #ffd700;
+            --accent: #00e6e6;
+            --text: #eee;
+            --font: 'Verdana', sans-serif;
+        }
+
+        * { box-sizing: border-box; touch-action: none; user-select: none; }
+
+        body {
+            margin: 0; padding: 0;
+            background: var(--bg-color);
+            color: var(--text);
+            font-family: var(--font);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%; height: 100%;
+            max-width: 600px; max-height: 900px;
+            display: flex; flex-direction: column;
+            background: #000;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        /* UI Layer */
+        .hud-top {
+            padding: 10px 15px;
+            background: linear-gradient(to bottom, #222, #111);
+            border-bottom: 2px solid #444;
+            display: flex; flex-direction: column; gap: 8px;
+            z-index: 10;
+        }
+
+        .stat-row { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: bold; }
+        .stat-label { color: #888; font-size: 11px; margin-right: 8px; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-val { color: #fff; text-shadow: 0 1px 2px #000; }
+        .stat-val.gold { color: var(--secondary); }
+
+        .bar-frame {
+            flex-grow: 1; height: 14px;
+            background: #222; border: 1px solid #555;
+            border-radius: 3px; overflow: hidden; position: relative;
+            margin: 0 10px;
+        }
+        .bar-fill { height: 100%; transition: width 0.2s; box-shadow: inset 0 2px 5px rgba(255,255,255,0.2); }
+        #hp-bar { background: linear-gradient(to bottom, #ff6666, #cc0000); width: 100%; }
+        #xp-bar { background: linear-gradient(to bottom, #66ccff, #0066cc); width: 0%; }
+
+        #canvas-wrapper {
+            flex-grow: 1; position: relative; overflow: hidden;
+            background: #080808;
+            display: flex; justify-content: center; align-items: center;
+        }
+        canvas { image-rendering: pixelated; box-shadow: 0 0 20px #000; }
+
+        .hud-bottom {
+            padding: 10px;
+            background: linear-gradient(to top, #222, #111);
+            border-top: 2px solid #444;
+            height: 160px;
+            display: flex; flex-direction: column;
+            z-index: 10;
+        }
+
+        #log {
+            flex-grow: 1; overflow-y: auto;
+            font-family: 'Courier New', monospace; font-size: 12px;
+            color: #ccc; background: rgba(0,0,0,0.3);
+            padding: 5px; border: 1px solid #333; margin-bottom: 8px;
+            border-radius: 3px;
+        }
+        .log-entry { margin-bottom: 2px; }
+        .c-imp { color: var(--secondary); } .c-danger { color: var(--primary); } .c-info { color: var(--accent); }
+
+        .inventory { display: flex; gap: 6px; overflow-x: auto; min-height: 50px; padding: 2px; }
+        .slot {
+            width: 48px; height: 48px;
+            background: #1a1a1a; border: 2px solid #444;
+            border-radius: 4px; position: relative;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .slot-icon { width: 32px; height: 32px; image-rendering: pixelated; }
+        .slot-count {
+            position: absolute; bottom: 2px; right: 2px;
+            font-size: 10px; color: #fff; background: rgba(0,0,0,0.8);
+            padding: 1px 4px; border-radius: 4px;
+        }
+
+        /* Screens */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; backdrop-filter: blur(5px);
+        }
+        .hidden { display: none !important; }
+
+        h1 {
+            font-size: 48px; color: var(--primary); margin: 0 0 20px 0;
+            text-shadow: 0 0 20px rgba(255,0,0,0.5); letter-spacing: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        p { color: #aaa; text-align: center; line-height: 1.6; margin-bottom: 40px; }
+
+        .btn {
+            background: linear-gradient(to bottom, #444, #222);
+            color: #fff; border: 1px solid #666;
+            padding: 15px 50px; font-size: 18px; font-weight: bold;
+            cursor: pointer; border-radius: 4px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            transition: all 0.1s;
+        }
+        .btn:hover { background: #555; transform: translateY(-2px); border-color: #fff; }
+        .btn:active { transform: translateY(0); }
+
+        .upgrade-card {
+            background: linear-gradient(135deg, #222, #111);
+            border: 1px solid #444; padding: 15px; margin: 8px;
+            width: 300px; cursor: pointer; border-radius: 6px;
+            transition: all 0.2s; position: relative; overflow: hidden;
+        }
+        .upgrade-card:hover { border-color: var(--secondary); transform: scale(1.02); }
+        .upgrade-card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+            background: var(--secondary);
+        }
+        .uc-title { color: #fff; font-size: 18px; font-weight: bold; margin-bottom: 5px; }
+        .uc-desc { color: #888; font-size: 12px; }
+
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="hud-top">
+        <div class="stat-row">
+            <div><span class="stat-label">LVL</span><span id="v-lvl" class="stat-val gold">1</span></div>
+            <div><span class="stat-label">FLOOR</span><span id="v-floor" class="stat-val">B1</span></div>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">HP</span>
+            <div class="bar-frame"><div id="hp-bar" class="bar-fill"></div></div>
+            <span id="v-hp" class="stat-val" style="font-size:12px">10/10</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">EXP</span>
+            <div class="bar-frame"><div id="xp-bar" class="bar-fill"></div></div>
+        </div>
+    </div>
+
+    <div id="canvas-wrapper">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <div class="hud-bottom">
+        <div id="log"></div>
+        <div id="inventory" class="inventory"></div>
+    </div>
+
+    <div id="s-start" class="screen">
+        <h1>SNAKE<br>DUNGEON</h1>
+        <p>深淵の迷宮へ挑め<br>スワイプ / 矢印キーで移動</p>
+        <button id="btn-start" class="btn">探索開始</button>
+    </div>
+
+    <div id="s-gameover" class="screen hidden">
+        <h1 style="color:#888">YOU DIED</h1>
+        <p>到達: <span id="end-floor" style="color:#fff">B1</span><br>レベル: <span id="end-lvl" style="color:#fff">1</span></p>
+        <button id="btn-restart" class="btn">再挑戦</button>
+    </div>
+
+    <div id="s-levelup" class="screen hidden">
+        <h1 style="color:var(--accent)">LEVEL UP</h1>
+        <p>能力を選択</p>
+        <div id="upgrades"></div>
+    </div>
+</div>
+
+<script>
+/**
+ * SNAKE DUNGEON - With Pixel Art Sprites
+ */
+
+const CONFIG = {
+    GRID: 16,
+    SPEED: 100,
+    COLORS: {
+        BG: '#080808',
+        WALL_TOP: '#444',
+        WALL_SIDE: '#222',
+        FLOOR_1: '#111',
+        FLOOR_2: '#161616',
+        SNAKE: '#ffcc00',
+        ENEMY: '#cc3333'
+    }
+};
+
+const IMAGES = {
+    dungeon: new Image(),
+    items: new Image()
+};
+
+let assetsLoaded = 0;
+function loadAssets(cb) {
+    IMAGES.dungeon.src = "dungeon.png";
+    IMAGES.dungeon.onload = () => { assetsLoaded++; if(assetsLoaded===2) cb(); };
+    IMAGES.items.src = "items.png";
+    IMAGES.items.onload = () => { assetsLoaded++; if(assetsLoaded===2) cb(); };
+    // Fallback
+    setTimeout(() => { if(assetsLoaded < 2) cb(); }, 500);
+}
+
+const state = {
+    running: false, paused: false,
+    floor: 1, turn: 0,
+    player: { x:0, y:0, body:[], hp:10, maxHp:10, xp:0, nextXp:20, lvl:1, atk:1, def:0, inv:{} },
+    map: [], width:0, height:0,
+    enemies: [], items: [], particles: [],
+    exit: {x:0, y:0, locked:true},
+    dir: {x:0, y:0}, nextDir: {x:0, y:0},
+    lastTime: 0, acc: 0
+};
+
+// DOM
+const cvs = document.getElementById('gameCanvas');
+const ctx = cvs.getContext('2d');
+const ui = {
+    lvl: document.getElementById('v-lvl'),
+    floor: document.getElementById('v-floor'),
+    hp: document.getElementById('v-hp'),
+    hpBar: document.getElementById('hp-bar'),
+    xpBar: document.getElementById('xp-bar'),
+    log: document.getElementById('log'),
+    inv: document.getElementById('inventory'),
+    screens: {
+        start: document.getElementById('s-start'),
+        over: document.getElementById('s-gameover'),
+        lvl: document.getElementById('s-levelup')
+    },
+    end: { floor: document.getElementById('end-floor'), lvl: document.getElementById('end-lvl') },
+    upgrades: document.getElementById('upgrades')
+};
+
+// Audio
+const Audio = {
+    ctx: null,
+    init() { if(!this.ctx) this.ctx = new (window.AudioContext||window.webkitAudioContext)(); if(this.ctx.state==='suspended') this.ctx.resume(); },
+    play(type) {
+        if(!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const o = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        o.connect(g); g.connect(this.ctx.destination);
+        
+        if(type==='step') {
+            o.frequency.setValueAtTime(80, t); o.type='triangle';
+            g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.01, t+0.05);
+            o.start(t); o.stop(t+0.05);
+        } else if(type==='hit') {
+            o.frequency.setValueAtTime(100, t); o.frequency.linearRampToValueAtTime(50, t+0.1); o.type='sawtooth';
+            g.gain.setValueAtTime(0.1, t); g.gain.exponentialRampToValueAtTime(0.01, t+0.1);
+            o.start(t); o.stop(t+0.1);
+        } else if(type==='kill') {
+            o.frequency.setValueAtTime(200, t); o.frequency.exponentialRampToValueAtTime(50, t+0.2); o.type='square';
+            g.gain.setValueAtTime(0.1, t); g.gain.exponentialRampToValueAtTime(0.01, t+0.2);
+            o.start(t); o.stop(t+0.2);
+        } else if(type==='item') {
+            o.frequency.setValueAtTime(600, t); o.frequency.linearRampToValueAtTime(1200, t+0.1); o.type='sine';
+            g.gain.setValueAtTime(0.1, t); g.gain.exponentialRampToValueAtTime(0.01, t+0.1);
+            o.start(t); o.stop(t+0.1);
+        } else if(type==='lvl') {
+            o.frequency.setValueAtTime(440, t); o.frequency.setValueAtTime(554, t+0.1); o.frequency.setValueAtTime(659, t+0.2);
+            g.gain.setValueAtTime(0.1, t); g.gain.linearRampToValueAtTime(0, t+0.6);
+            o.start(t); o.stop(t+0.6);
+        }
+    }
+};
+
+// Init
+function init() {
+    resize(); window.addEventListener('resize', resize);
+    document.addEventListener('keydown', input);
+    setupTouch();
+    
+    // Load assets before allowing start
+    loadAssets(() => {
+        document.getElementById('btn-start').onclick = start;
+        document.getElementById('btn-restart').onclick = start;
+        document.getElementById('btn-start').innerText = "探索開始";
+    });
+    document.getElementById('btn-start').innerText = "LOADING...";
+}
+
+function resize() {
+    const w = document.getElementById('canvas-wrapper');
+    const cols = Math.floor(w.clientWidth / CONFIG.GRID);
+    const rows = Math.floor(w.clientHeight / CONFIG.GRID);
+    cvs.width = cols * CONFIG.GRID; cvs.height = rows * CONFIG.GRID;
+    state.width = cols; state.height = rows;
+    if(state.running) draw();
+}
+
+function start() {
+    Audio.init();
+    state.running = true; state.paused = false;
+    state.floor = 1; state.turn = 0;
+    state.player = { hp:10, maxHp:10, xp:0, nextXp:20, lvl:1, atk:1, def:0, inv:{}, body:[], x:0, y:0 };
+    state.dir = {x:0, y:0}; state.nextDir = {x:0, y:0};
+    
+    ui.screens.start.classList.add('hidden');
+    ui.screens.over.classList.add('hidden');
+    ui.log.innerHTML = '';
+    log("ダンジョンに入った...", "c-info");
+    
+    genFloor();
+    updateUI();
+    requestAnimationFrame(loop);
+}
+
+// Dungeon Generation (Room & Corridor)
+function genFloor() {
+    state.map = []; state.enemies = []; state.items = []; state.particles = [];
+    
+    // Init Wall
+    for(let y=0; y<state.height; y++) {
+        state.map[y] = [];
+        for(let x=0; x<state.width; x++) state.map[y][x] = 1;
+    }
+    
+    const rooms = [];
+    const minSize = 5;
+    const maxSize = 10;
+    const maxRooms = 10;
+    
+    for(let i=0; i<maxRooms; i++) {
+        const w = Math.floor(Math.random() * (maxSize - minSize + 1)) + minSize;
+        const h = Math.floor(Math.random() * (maxSize - minSize + 1)) + minSize;
+        const x = Math.floor(Math.random() * (state.width - w - 2)) + 1;
+        const y = Math.floor(Math.random() * (state.height - h - 2)) + 1;
+        
+        const newRoom = {x, y, w, h};
+        
+        // Check overlap
+        let failed = false;
+        for(let r of rooms) {
+            if(x < r.x + r.w + 1 && x + w + 1 > r.x && y < r.y + r.h + 1 && y + h + 1 > r.y) {
+                failed = true; break;
+            }
+        }
+        if(!failed) {
+            createRoom(newRoom);
+            if(rooms.length > 0) {
+                const prev = rooms[rooms.length-1];
+                connect(prev.x + Math.floor(prev.w/2), prev.y + Math.floor(prev.h/2),
+                        newRoom.x + Math.floor(newRoom.w/2), newRoom.y + Math.floor(newRoom.h/2));
+            }
+            rooms.push(newRoom);
+        }
+    }
+    
+    // Player Start
+    const startRoom = rooms[0];
+    state.player.x = startRoom.x + Math.floor(startRoom.w/2);
+    state.player.y = startRoom.y + Math.floor(startRoom.h/2);
+    state.player.body = [{x:state.player.x, y:state.player.y}, {x:state.player.x, y:state.player.y}, {x:state.player.x, y:state.player.y}];
+    
+    // Exit
+    const endRoom = rooms[rooms.length-1];
+    state.exit = { x: endRoom.x + Math.floor(endRoom.w/2), y: endRoom.y + Math.floor(endRoom.h/2), locked: true };
+    
+    // Key
+    spawn('key', rooms);
+    
+    // Items & Enemies
+    const difficulty = state.floor;
+    for(let i=0; i<3 + difficulty; i++) spawn('enemy', rooms);
+    for(let i=0; i<3; i++) spawn(Math.random()>0.5?'potion':'sword', rooms);
+    
+    log(`地下 ${state.floor} 階`);
+}
+
+function createRoom(r) {
+    for(let y=r.y; y<r.y+r.h; y++) {
+        for(let x=r.x; x<r.x+r.w; x++) {
+            state.map[y][x] = 0;
+        }
+    }
+}
+
+function connect(x1, y1, x2, y2) {
+    // Horizontal then Vertical
+    let x = x1;
+    while(x !== x2) {
+        state.map[y1][x] = 0;
+        state.map[y1+1][x] = 0; // Wide corridor
+        x += (x2 > x1 ? 1 : -1);
+    }
+    let y = y1;
+    while(y !== y2) {
+        state.map[y][x2] = 0;
+        state.map[y][x2+1] = 0;
+        y += (y2 > y1 ? 1 : -1);
+    }
+}
+
+function spawn(type, rooms) {
+    let placed = false;
+    while(!placed) {
+        const r = rooms[Math.floor(Math.random() * rooms.length)];
+        const x = Math.floor(Math.random() * r.w) + r.x;
+        const y = Math.floor(Math.random() * r.h) + r.y;
+        
+        if(!isOccupied(x, y)) {
+            if(type === 'enemy') {
+                if(dist(x,y,state.player.x,state.player.y) > 5) {
+                    state.enemies.push({x, y, hp:2+state.floor, maxHp:2+state.floor, atk:1+Math.floor(state.floor/2)});
+                    placed = true;
+                }
+            } else {
+                state.items.push({x, y, type});
+                placed = true;
+            }
+        }
+    }
+}
+
+function isOccupied(x, y) {
+    if(x===state.player.x && y===state.player.y) return true;
+    if(x===state.exit.x && y===state.exit.y) return true;
+    if(state.items.some(i=>i.x===x && i.y===y)) return true;
+    if(state.enemies.some(e=>e.x===x && e.y===y)) return true;
+    return false;
+}
+
+function dist(x1,y1,x2,y2) { return Math.abs(x1-x2)+Math.abs(y1-y2); }
+
+// Game Loop
+function loop(t) {
+    if(!state.running) return;
+    const dt = t - state.lastTime;
+    state.lastTime = t;
+    
+    if(!state.paused) {
+        state.acc += dt;
+        if(state.acc >= CONFIG.SPEED) {
+            state.acc = 0;
+            tick();
+        }
+    }
+    
+    updateParticles();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+function tick() {
+    if(state.nextDir.x!==0 || state.nextDir.y!==0) state.dir = state.nextDir;
+    if(state.dir.x===0 && state.dir.y===0) return;
+    
+    const nx = state.player.x + state.dir.x;
+    const ny = state.player.y + state.dir.y;
+    
+    // Wall
+    if(nx<0 || nx>=state.width || ny<0 || ny>=state.height || state.map[ny][nx]===1) {
+        Audio.play('hit'); return;
+    }
+    
+    // Enemy
+    const eIdx = state.enemies.findIndex(e=>e.x===nx && e.y===ny);
+    if(eIdx !== -1) {
+        combat(state.enemies[eIdx], eIdx); return;
+    }
+    
+    // Move
+    state.player.body.unshift({x:state.player.x, y:state.player.y});
+    state.player.x = nx; state.player.y = ny;
+    
+    // Self Hit
+    for(let i=0; i<state.player.body.length-1; i++) {
+        if(nx===state.player.body[i].x && ny===state.player.body[i].y) {
+            log("自分の体を噛んだ！", "c-danger");
+            damage(1); state.player.body.pop();
+        }
+    }
+    state.player.body.pop();
+    
+    // Item
+    const iIdx = state.items.findIndex(i=>i.x===nx && i.y===ny);
+    if(iIdx !== -1) {
+        const item = state.items[iIdx];
+        state.items.splice(iIdx, 1);
+        Audio.play('item');
+        if(item.type==='potion') {
+            const heal = 5; state.player.hp = Math.min(state.player.maxHp, state.player.hp+heal);
+            log(`ポーション: HP+${heal}`, "c-imp");
+        } else if(item.type==='sword') {
+            state.player.atk++; log("剣: 攻撃力+1", "c-imp");
+        } else if(item.type==='key') {
+            addInv('key'); log("鍵を拾った", "c-imp");
+        }
+        updateUI();
+    }
+    
+    // Exit
+    if(nx===state.exit.x && ny===state.exit.y) {
+        if(state.exit.locked) {
+            if(state.player.inv['key']>0) {
+                state.exit.locked = false; state.player.inv['key']--;
+                log("鍵を開けた！", "c-imp"); updateUI();
+            } else log("鍵が必要だ");
+        } else {
+            state.floor++; log("次の階層へ...", "c-info"); genFloor(); updateUI();
+        }
+    }
+    
+    // Enemy Turn
+    state.enemies.forEach(e => {
+        if(dist(e.x,e.y,state.player.x,state.player.y) < 8) {
+            const dx = Math.sign(state.player.x - e.x);
+            const dy = Math.sign(state.player.y - e.y);
+            let ex = e.x + dx, ey = e.y;
+            if(state.map[ey][ex]===1 || isOccupied(ex, ey)) { ex = e.x; ey = e.y + dy; }
+            if(state.map[ey][ex]===0 && !isOccupied(ex, ey)) { e.x = ex; e.y = ey; }
+        }
+    });
+    
+    state.turn++;
+    Audio.play('step');
+}
+
+function combat(e, idx) {
+    e.hp -= state.player.atk;
+    part(e.x, e.y, '#fff'); Audio.play('hit');
+    if(e.hp <= 0) {
+        log(`敵を倒した！ +${state.floor*2}XP`);
+        state.enemies.splice(idx, 1);
+        state.player.xp += state.floor*2;
+        if(state.player.xp >= state.player.nextXp) lvlUp();
+        Audio.play('kill');
+    } else {
+        const dmg = Math.max(0, e.atk - state.player.def);
+        log(`反撃を受けた: -${dmg}HP`, "c-danger");
+        damage(dmg);
+    }
+    updateUI();
+}
+
+function damage(n) {
+    state.player.hp -= n;
+    if(state.player.hp <= 0) {
+        state.running = false;
+        ui.end.floor.textContent = "B"+state.floor;
+        ui.end.lvl.textContent = state.player.lvl;
+        ui.screens.over.classList.remove('hidden');
+    }
+    updateUI();
+}
+
+function lvlUp() {
+    state.paused = true;
+    state.player.lvl++; state.player.xp -= state.player.nextXp;
+    state.player.nextXp = Math.floor(state.player.nextXp * 1.5);
+    state.player.hp = state.player.maxHp;
+    Audio.play('lvl');
+    
+    ui.upgrades.innerHTML = '';
+    const opts = [
+        {t:"最大HP +5", d:"生存力を強化", f:()=>{state.player.maxHp+=5; state.player.hp+=5;}},
+        {t:"攻撃力 +1", d:"敵を粉砕する", f:()=>{state.player.atk+=1;}},
+        {t:"防御力 +1", d:"守りを固める", f:()=>{state.player.def+=1;}}
+    ];
+    opts.forEach(o => {
+        const d = document.createElement('div'); d.className='upgrade-card';
+        d.innerHTML = `<div class="uc-title">${o.t}</div><div class="uc-desc">${o.d}</div>`;
+        d.onclick = () => { o.f(); ui.screens.lvl.classList.add('hidden'); state.paused = false; updateUI(); log("レベルアップ！", "c-info"); };
+        ui.upgrades.appendChild(d);
+    });
+    ui.screens.lvl.classList.remove('hidden');
+}
+
+function addInv(k) {
+    state.player.inv[k] = (state.player.inv[k]||0) + 1;
+    updateUI();
+}
+
+// Visuals
+function part(x, y, c) {
+    for(let i=0; i<6; i++) state.particles.push({x, y, vx:(Math.random()-0.5)*2, vy:(Math.random()-0.5)*2, l:10, c});
+}
+function updateParticles() {
+    for(let i=state.particles.length-1; i>=0; i--) {
+        let p = state.particles[i]; p.x+=p.vx; p.y+=p.vy; p.l-=1;
+        if(p.l<=0) state.particles.splice(i,1);
+    }
+}
+
+// Drawing with Sprites
+function draw() {
+    ctx.fillStyle = CONFIG.COLORS.BG;
+    ctx.fillRect(0, 0, cvs.width, cvs.height);
+    
+    const camX = state.player.x * CONFIG.GRID - cvs.width/2;
+    const camY = state.player.y * CONFIG.GRID - cvs.height/2;
+    
+    ctx.save();
+    ctx.translate(-Math.floor(camX), -Math.floor(camY));
+    
+    // Draw Map
+    const startCol = Math.floor(camX / CONFIG.GRID);
+    const endCol = startCol + (cvs.width / CONFIG.GRID) + 1;
+    const startRow = Math.floor(camY / CONFIG.GRID);
+    const endRow = startRow + (cvs.height / CONFIG.GRID) + 1;
+    
+    for(let y=startRow; y<=endRow; y++) {
+        for(let x=startCol; x<=endCol; x++) {
+            if(y>=0 && y<state.height && x>=0 && x<state.width) {
+                const tile = state.map[y][x];
+                // Draw Floor for everything first
+                if(IMAGES.dungeon.complete) {
+                    ctx.drawImage(IMAGES.dungeon, 0, 0, 32, 32, x*CONFIG.GRID, y*CONFIG.GRID, CONFIG.GRID, CONFIG.GRID);
+                    if(tile === 1) {
+                        ctx.drawImage(IMAGES.dungeon, 32, 0, 32, 32, x*CONFIG.GRID, y*CONFIG.GRID, CONFIG.GRID, CONFIG.GRID);
+                    }
+                } else {
+                    // Fallback
+                    ctx.fillStyle = tile === 1 ? CONFIG.COLORS.WALL_TOP : CONFIG.COLORS.FLOOR_1;
+                    ctx.fillRect(x*CONFIG.GRID, y*CONFIG.GRID, CONFIG.GRID, CONFIG.GRID);
+                }
+            }
+        }
+    }
+    
+    // Draw Items
+    for(let i of state.items) {
+        let sx = 0, sy = 0;
+        if(i.type === 'potion') { sx = 0; sy = 0; }
+        else if(i.type === 'sword') { sx = 32; sy = 0; }
+        else if(i.type === 'key') { sx = 0; sy = 32; }
+        
+        if(IMAGES.items.complete) {
+            ctx.drawImage(IMAGES.items, sx, sy, 32, 32, i.x*CONFIG.GRID, i.y*CONFIG.GRID, CONFIG.GRID, CONFIG.GRID);
+        } else {
+            // Fallback
+            ctx.fillStyle = i.type === 'key' ? '#ff0' : (i.type === 'potion' ? '#0f0' : '#0cf');
+            ctx.beginPath();
+            ctx.arc(i.x*CONFIG.GRID + CONFIG.GRID/2, i.y*CONFIG.GRID + CONFIG.GRID/2, CONFIG.GRID/3, 0, Math.PI*2);
+            ctx.fill();
+        }
+    }
+    
+    // Draw Exit
+    if(state.exit) {
+        ctx.fillStyle = state.exit.locked ? '#555' : '#0ff';
+        ctx.fillRect(state.exit.x*CONFIG.GRID + 2, state.exit.y*CONFIG.GRID + 2, CONFIG.GRID-4, CONFIG.GRID-4);
+    }
+    
+    // Draw Enemies
+    for(let e of state.enemies) {
+        if(IMAGES.dungeon.complete) {
+            ctx.drawImage(IMAGES.dungeon, 32, 32, 32, 32, e.x*CONFIG.GRID, e.y*CONFIG.GRID, CONFIG.GRID, CONFIG.GRID);
+        } else {
+            // Fallback
+            ctx.fillStyle = CONFIG.COLORS.ENEMY;
+            ctx.fillRect(e.x*CONFIG.GRID + 2, e.y*CONFIG.GRID + 2, CONFIG.GRID-4, CONFIG.GRID-4);
+        }
+        
+        // HP Bar
+        const hpPct = e.hp / e.maxHp;
+        ctx.fillStyle = 'red';
+        ctx.fillRect(e.x*CONFIG.GRID, e.y*CONFIG.GRID - 4, CONFIG.GRID, 2);
+        ctx.fillStyle = 'green';
+        ctx.fillRect(e.x*CONFIG.GRID, e.y*CONFIG.GRID - 4, CONFIG.GRID * hpPct, 2);
+    }
+    
+    // Draw Player (Snake)
+    ctx.fillStyle = CONFIG.COLORS.SNAKE;
+    for(let i=1; i<state.player.body.length; i++) {
+        const p = state.player.body[i];
+        ctx.beginPath();
+        ctx.arc(p.x*CONFIG.GRID + CONFIG.GRID/2, p.y*CONFIG.GRID + CONFIG.GRID/2, CONFIG.GRID/2 - 1, 0, Math.PI*2);
+        ctx.fill();
+    }
+    
+    // Head
+    const head = state.player.body[0];
+    if(head) {
+        ctx.save();
+        ctx.translate(head.x*CONFIG.GRID + CONFIG.GRID/2, head.y*CONFIG.GRID + CONFIG.GRID/2);
+        
+        let ang = 0;
+        if(state.dir.x === 1) ang = 0;
+        else if(state.dir.x === -1) ang = Math.PI;
+        else if(state.dir.y === 1) ang = Math.PI/2;
+        else if(state.dir.y === -1) ang = -Math.PI/2;
+        
+        ctx.rotate(ang);
+        if(IMAGES.dungeon.complete) {
+            ctx.drawImage(IMAGES.dungeon, 0, 32, 32, 32, -CONFIG.GRID/2, -CONFIG.GRID/2, CONFIG.GRID, CONFIG.GRID);
+        } else {
+            // Fallback
+            ctx.fillStyle = CONFIG.COLORS.SNAKE;
+            ctx.fillRect(-CONFIG.GRID/2, -CONFIG.GRID/2, CONFIG.GRID, CONFIG.GRID);
+        }
+        ctx.restore();
+    }
+    
+    // Particles
+    for(let p of state.particles) {
+        ctx.fillStyle = p.c;
+        ctx.globalAlpha = p.l / 10;
+        ctx.fillRect(p.x*CONFIG.GRID, p.y*CONFIG.GRID, 4, 4);
+        ctx.globalAlpha = 1.0;
+    }
+    
+    ctx.restore();
+}
+
+function updateUI() {
+    ui.lvl.textContent = state.player.lvl;
+    ui.floor.textContent = "B"+state.floor;
+    ui.hp.textContent = `${state.player.hp}/${state.player.maxHp}`;
+    ui.hpBar.style.width = `${(state.player.hp/state.player.maxHp)*100}%`;
+    ui.xpBar.style.width = `${(state.player.xp/state.player.nextXp)*100}%`;
+    
+    ui.inv.innerHTML = '';
+    for(let k in state.player.inv) {
+        if(state.player.inv[k]>0) {
+            const d = document.createElement('div'); d.className='slot';
+            let icon = '';
+            if(k==='key') icon = '<div style="width:10px;height:4px;background:#ff0;box-shadow:2px 2px 0 #b80"></div>';
+            d.innerHTML = `${icon}<span class="slot-count">${state.player.inv[k]}</span>`;
+            ui.inv.appendChild(d);
+        }
+    }
+}
+
+function log(m, c='') {
+    const d = document.createElement('div'); d.className = `log-entry ${c}`; d.textContent = `> ${m}`;
+    ui.log.prepend(d);
+}
+
+function input(e) {
+    if(!state.running) return;
+    const k = e.key;
+    if((k==='ArrowUp'||k==='w') && state.dir.y===0) state.nextDir={x:0,y:-1};
+    if((k==='ArrowDown'||k==='s') && state.dir.y===0) state.nextDir={x:0,y:1};
+    if((k==='ArrowLeft'||k==='a') && state.dir.x===0) state.nextDir={x:-1,y:0};
+    if((k==='ArrowRight'||k==='d') && state.dir.x===0) state.nextDir={x:1,y:0};
+}
+
+function setupTouch() {
+    let sx=0, sy=0;
+    cvs.addEventListener('touchstart', e=>{sx=e.touches[0].clientX; sy=e.touches[0].clientY;}, {passive:false});
+    cvs.addEventListener('touchend', e=>{
+        if(!state.running) return;
+        const dx = e.changedTouches[0].clientX - sx;
+        const dy = e.changedTouches[0].clientY - sy;
+        if(Math.abs(dx)>Math.abs(dy) && Math.abs(dx)>30) state.nextDir = {x:dx>0?1:-1, y:0};
+        else if(Math.abs(dy)>30) state.nextDir = {x:0, y:dy>0?1:-1};
+    }, {passive:false});
+}
+
+init();
+</script>
+</body>
+</html>
