@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>竜の古城 — Dragon Flight</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0e14; }
+    body {
+      font-family: 'Segoe UI', 'Yu Gothic', -apple-system, sans-serif;
+      color: #e6edf3;
+      user-select: none;
+      cursor: crosshair;
+    }
+    #game-canvas { display: block; width: 100vw; height: 100vh; }
+
+    /* ---- HUD layers. Each module owns one container; all start present + empty. ---- */
+    #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+    #hud > * { position: absolute; }
+
+    /* top-left: HP/MP crest (hud.js) */
+    #hud-vitals { top: 18px; left: 18px; }
+    /* top-center: compass (compass.js) */
+    #hud-compass { top: 14px; left: 50%; transform: translateX(-50%); }
+    /* top-right: minimap (minimap.js) */
+    #hud-minimap { top: 16px; right: 18px; }
+    /* right: quest panel (quest.js) */
+    #hud-quest { top: 120px; right: 18px; }
+    /* bottom-center: ability hotbar (abilities.js) */
+    #hud-hotbar { bottom: 22px; left: 50%; transform: translateX(-50%); }
+    /* bottom-left: control hints (static) */
+    #hud-controls {
+      bottom: 24px; left: 24px; font-size: 13px; color: #cfd8e3;
+      text-shadow: 0 1px 3px rgba(0,0,0,.9); line-height: 2;
+    }
+    #hud-controls .key {
+      display: inline-block; min-width: 22px; padding: 1px 6px; margin-right: 8px;
+      border: 1px solid rgba(255,255,255,.45); border-radius: 4px; text-align: center;
+      font-size: 11px; background: rgba(0,0,0,.35);
+    }
+    /* center: ability cast feedback / damage overlays (abilities.js, firebreath.js) */
+    #hud-center { top: 0; left: 0; width: 100%; height: 100%; }
+    /* overlay screens: title / win / lose (screens.js) */
+    #hud-screens { top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+  <div id="hud">
+    <div id="hud-vitals"></div>
+    <div id="hud-compass"></div>
+    <div id="hud-minimap"></div>
+    <div id="hud-quest"></div>
+    <div id="hud-hotbar"></div>
+    <div id="hud-center"></div>
+    <div id="hud-controls">
+      <div><span class="key">Shift</span>加速</div>
+      <div><span class="key">Ctrl</span>下降</div>
+      <div><span class="key">F</span>ファイアブレス</div>
+      <div><span class="key">1-4</span>スキル</div>
+    </div>
+    <div id="hud-screens"></div>
+  </div>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

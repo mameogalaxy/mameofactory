@@ -1,0 +1,16 @@
+{
+  "name": "dragon-flight",
+  "version": "0.1.0",
+  "private": true,
+  "description": "竜の古城 — Three.js dragon flight game (static, no build step).",
+  "type": "module",
+  "scripts": {
+    "serve": "serve -l 8123 .",
+    "test": "playwright test",
+    "smoke": "playwright test tests/smoke.spec.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "serve": "^14.2.4"
+  }
+}
