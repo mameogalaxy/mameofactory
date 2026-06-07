@@ -670,8 +670,9 @@ function hookHint(){
 }
 
 function fightHUD(){
-  // 魚スタミナ
-  bar(W/2-170,48,340,16,S.fishHP/S.fishMax,'#7fff8a',`${S.fish.name}  スタミナ`);
+  // 魚の名前（スタミナゲージは表示しない）
+  ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif'; ctx.textAlign='center';
+  ctx.shadowColor='#000'; ctx.shadowBlur=6; ctx.fillText(S.fish.name, W/2, 64); ctx.shadowBlur=0; ctx.textAlign='left';
   // テンション（横・危険ゾーン付き）
   const tx=W/2-170,ty=82,tw=340,th=14;
   roundRect(ctx,tx,ty,tw,th,7); ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fill();
