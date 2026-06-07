@@ -111,7 +111,23 @@ const FISH_DB = [
   {id:'NUSHI', name:'伝説のヌシ・レヴィアコス', planet:4, tier:5, boss:true,
    hp:900, power:3.2, speed:1.4, size:2.2,
    c1:'#9be8ff', c2:'#1b2b8a', fin:'#ffd34d', glow:'rgba(255,215,80,.7)', tail:1.4, spike:1.5, pattern:'stripe', fat:1.4},
+
+  // --- 各惑星のヌシ（その星のボス） ---
+  {id:'nushi0', name:'ネオンの主・アクアレックス', planet:0, tier:3, boss:true,
+   hp:300, power:1.4, speed:1.2, size:1.6,
+   c1:'#7fe3ff', c2:'#1560a6', fin:'#ffd34d', glow:'rgba(120,220,255,.6)', tail:1.0, spike:0.8, pattern:'spot', fat:1.3},
+  {id:'nushi1', name:'溶岩の主・イグニフレア', planet:1, tier:4, boss:true,
+   hp:460, power:1.9, speed:1.3, size:1.75,
+   c1:'#ffb24d', c2:'#8a1505', fin:'#ffd34d', glow:'rgba(255,120,40,.65)', tail:1.1, spike:1.1, pattern:'stripe', fat:1.35},
+  {id:'nushi2', name:'氷結の主・グレイシオン', planet:2, tier:4, boss:true,
+   hp:600, power:2.2, speed:1.5, size:1.85,
+   c1:'#dffaff', c2:'#2a6ec0', fin:'#ffd34d', glow:'rgba(180,235,255,.65)', tail:1.2, spike:1.2, pattern:'spot', fat:1.2},
+  {id:'nushi3', name:'雷雲の主・ライジンガ', planet:3, tier:5, boss:true,
+   hp:760, power:2.6, speed:1.6, size:1.95,
+   c1:'#fff27a', c2:'#3a1a6e', fin:'#ffd34d', glow:'rgba(255,240,120,.7)', tail:1.3, spike:1.4, pattern:'stripe', fat:1.3},
 ];
 
 function fishForPlanet(p){ return FISH_DB.filter(f=>f.planet===p); }
+function normalFishForPlanet(p){ return FISH_DB.filter(f=>f.planet===p && !f.boss); }
+function nushiForPlanet(p){ return FISH_DB.find(f=>f.planet===p && f.boss); }
 function getNushi(){ return FISH_DB.find(f=>f.id==='NUSHI'); }
