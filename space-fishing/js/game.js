@@ -22,11 +22,12 @@ const G = {
 };
 // 難易度：tenMul=テンションの上がりやすさ hpMul=魚の体力 fillMul=こうげき/エレキの溜まり reachMul=寄せ上限のキツさ runMul=暴れの長さ
 const DIFF = [
-  {key:'easy',   name:'イージー', sub:'のんびり', col:'#7fff8a', tenMul:0.62, hpMul:0.7,  fillMul:1.35, reachMul:0.7, runMul:0.8 },
-  {key:'normal', name:'ふつう',   sub:'てごたえ', col:'#ffd34d', tenMul:1.0,  hpMul:1.0,  fillMul:1.0,  reachMul:1.0, runMul:1.0 },
-  {key:'hard',   name:'ハード',   sub:'ガチ勝負', col:'#ff6b6b', tenMul:1.5,  hpMul:1.5,  fillMul:0.78, reachMul:1.25,runMul:1.3 },
+  {key:'easy',   name:'イージー', sub:'てごたえ', col:'#7fff8a', tenMul:1.0,  hpMul:1.0, fillMul:1.1,  reachMul:1.0,  runMul:1.0 },
+  {key:'normal', name:'ふつう',   sub:'ガチ勝負', col:'#ffd34d', tenMul:1.7,  hpMul:1.6, fillMul:0.85, reachMul:1.3,  runMul:1.35 },
+  {key:'hard',   name:'ハード',   sub:'ベテラン', col:'#ff9b3b', tenMul:2.2,  hpMul:2.2, fillMul:0.7,  reachMul:1.55, runMul:1.6 },
+  {key:'beast',  name:'ビースト', sub:'狂暴',     col:'#ff4d6b', tenMul:3.0,  hpMul:3.0, fillMul:0.55, reachMul:1.9,  runMul:2.0 },
 ];
-function D(){ return DIFF[G.difficulty]||DIFF[1]; }
+function D(){ return DIFF[G.difficulty]||DIFF[0]; }
 // 各惑星でヌシが現れるまでに釣る通常魚の数（惑星4はいきなりヌシ）
 const QUOTA = [2,2,3,3,0];
 function isNushiTime(){ return !G.nushiDone[G.planet] && G.planetProgress[G.planet] >= QUOTA[G.planet]; }
@@ -808,7 +809,7 @@ function renderTitle(){
   ctx.fillText(touchMode()?'ボタンをタップ・むずかしさも選べる':'↑↓で選択 ←→でむずかしさ ○/SPACEで決定',W/2,H-22);
   ctx.textAlign='left';
 }
-function diffRects(){ const w=128,h=46,gap=12,y=486,total=w*3+gap*2,x0=W/2-total/2;
+function diffRects(){ const n=DIFF.length,gap=10,w=Math.min(128,(420-gap*(n-1))/n),h=46,y=486,total=w*n+gap*(n-1),x0=W/2-total/2;
   return DIFF.map((d,i)=>({x:x0+i*(w+gap), y:y-h/2, w, h, i})); }
 function drawDifficulty(){
   ctx.fillStyle='#cfe'; ctx.font='bold 15px sans-serif'; ctx.textAlign='center';
