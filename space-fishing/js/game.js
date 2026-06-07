@@ -16,19 +16,22 @@ const NEAR_X = 300;    // 寄せきった位置
 
 const G = {
   state:'LOADING', t:0, planet:0, selCursor:0, unlocked:1,
-  caught:[], planetProgress:[0,0,0,0,0],
+  caught:[], planetProgress:[0,0,0,0,0], nushiDone:[false,false,false,false,false],
   shake:0, flash:0, flashCol:'255,255,255', msg:null, msgT:0, fade:1,
 };
-const TARGET = [3,3,3,3,1];
+// 各惑星でヌシが現れるまでに釣る通常魚の数（惑星4はいきなりヌシ）
+const QUOTA = [2,2,3,3,0];
+function isNushiTime(){ return !G.nushiDone[G.planet] && G.planetProgress[G.planet] >= QUOTA[G.planet]; }
 
 try{
   const s=JSON.parse(localStorage.getItem('stellar_angler')||'{}');
   if(s.unlocked) G.unlocked=s.unlocked;
   if(s.caught) G.caught=s.caught;
   if(s.planetProgress) G.planetProgress=s.planetProgress;
+  if(s.nushiDone) G.nushiDone=s.nushiDone;
 }catch(e){}
 function save(){ try{ localStorage.setItem('stellar_angler', JSON.stringify({
-  unlocked:G.unlocked, caught:G.caught, planetProgress:G.planetProgress })); }catch(e){} }
+  unlocked:G.unlocked, caught:G.caught, planetProgress:G.planetProgress, nushiDone:G.nushiDone })); }catch(e){} }
 function toast(t,d=2.2){ G.msg=t; G.msgT=d; }
 function flash(a=0.6,c='255,255,255'){ G.flash=a; G.flashCol=c; }
 
@@ -60,9 +63,14 @@ const S = {
 
 function resetSwimmers(){
   S.swimmers.length=0;
-  const pool=fishForPlanet(G.planet);
-  const n=G.planet===4?1:5;
-  for(let i=0;i<n;i++){ const d=U.pick(pool);
+  if(isNushiTime()){
+    // ヌシ出現：1体だけ
+    const d=nushiForPlanet(G.planet);
+    S.swimmers.push({d, x:U.rand(AX+260,W-80), y:U.rand(WL+50,H-60), vx:U.rand(-1,1)*1.0, phase:0, state:'wander'});
+    return;
+  }
+  const pool=normalFishForPlanet(G.planet);
+  for(let i=0;i<5;i++){ const d=U.pick(pool);
     S.swimmers.push({d, x:U.rand(AX+220,W-60), y:U.rand(WL+40,H-50), vx:U.rand(-1,1)*1.2, phase:U.rand(0,6.28), state:'wander'}); }
 }
 
@@ -118,7 +126,8 @@ function enterPlanet(){
   if(G.selCursor>=G.unlocked){ Sound.SE.back(); toast('この惑星はまだロックされている…'); return; }
   Sound.SE.select(); G.planet=G.selCursor; resetSwimmers();
   S.aimX=540; S.power=0; G.state='CAST'; G.fade=1;
-  toast(PLANETS[G.planet].name+'に到着！ '+(touchMode()?'押してる間ねらって、離すと投げる':'←→でねらって ○ で投げる'),3.0);
+  if(isNushiTime()) toast('✦ この星のヌシ「'+nushiForPlanet(G.planet).name+'」が潜んでいる…！',3.4);
+  else toast(PLANETS[G.planet].name+'に到着！ '+(touchMode()?'押してる間ねらって、離すと投げる':'←→でねらって ○ で投げる'),3.0);
 }
 
 // ---------------- CAST（ねらう→投げる）----------------
@@ -230,14 +239,16 @@ function updateFight(dt){
 
   if(!koed){
     if(S.mode==='run'){
-      S.tension += dt*(14 + reelAmt*26)*S.fish.power*0.5;
-      S.progress += reelAmt*dt*3;                 // 暴れ中は寄らない
+      // 暴れ中：巻くとテンション急上昇＆逆に引き出される（寄らない）
+      S.tension += dt*(10 + reelAmt*44)*(0.5 + S.fish.power*0.5);
+      if(reeling){ S.progress = Math.max(0, S.progress - reelAmt*dt*3); if(Math.random()<0.2) Sound.SE.warn(); }
     }else{
+      // おとなしい時：安全に巻ける唯一のチャンス
       S.tension += dt*(reelAmt*4 - 7);
-      S.progress += reelAmt*dt*16;                // チャンス！よく寄る
+      S.progress += reelAmt*dt*16;
+      if(reeling && Math.random()<0.3) Sound.SE.reel();
     }
-    S.charge += dt*(reeling?26:14);               // アクションゲージ
-    if(reeling && Math.random()<0.3) Sound.SE.reel();
+    S.charge += dt*(reeling?22:13);               // アクションゲージ
   }else{
     S.tension=U.lerp(S.tension,8,dt*2); S.progress+=(reelAmt+1.4)*dt*22;
   }
@@ -272,7 +283,9 @@ function updateFight(dt){
 function landFish(){
   const d=S.fish; const cm=Math.round((30+d.size*60)*U.rand(0.7,1.5));
   S.caughtData={id:d.id,name:d.name,cm,tier:d.tier,boss:!!d.boss,t:Date.now()};
-  G.caught.push(S.caughtData); G.planetProgress[G.planet]++; save();
+  G.caught.push(S.caughtData);
+  if(!d.boss) G.planetProgress[G.planet]++;   // ヌシ出現は通常魚の釣果数で進む
+  save();
   Sound.SE.fanfare(); flash(0.6);
   burst(NEAR_X,WL-60,30,{c:'#ffd34d',smax:7,up:3,lmax:1.1,rmax:6,glow:true,g:0.04});
   G.state='CATCH'; S.catchAnim=0;
@@ -282,12 +295,16 @@ function landFish(){
 function updateCatch(dt){ S.catchAnim+=dt; if(S.catchAnim>0.8&&uiConfirm()){ G.state='RESULT'; S.resultAnim=0; } }
 function updateResult(dt){ S.resultAnim+=dt;
   if(S.resultAnim>0.5&&uiConfirm()){
-    const need=TARGET[G.planet];
-    if(G.planetProgress[G.planet]>=need){
-      if(S.caughtData.boss){ G.state='ENDING'; S.endAnim=0; Sound.SE.fanfare(); return; }
+    if(S.caughtData.boss){
+      G.nushiDone[G.planet]=true; save();
+      if(S.caughtData.id==='NUSHI'){ G.state='ENDING'; S.endAnim=0; Sound.SE.fanfare(); return; }
       if(G.unlocked<G.planet+2){ G.unlocked=Math.min(PLANETS.length,G.planet+2); save(); }
       G.state='CLEAR'; S.clearAnim=0; Sound.SE.fanfare();
-    }else{ G.state='CAST'; S.aimX=540; S.power=0; if(S.swimmers.length<2) resetSwimmers(); }
+    }else{
+      // 通常魚：続けて釣る（規定数に達していれば次の投擲でヌシ出現）
+      G.state='CAST'; S.aimX=540; S.power=0; resetSwimmers();
+      if(isNushiTime()) toast('✦ ヌシ「'+nushiForPlanet(G.planet).name+'」が現れた…！',3.2);
+    }
   }
 }
 function updateClear(dt){ S.clearAnim+=dt; if(S.clearAnim>1&&uiConfirm()){ Sound.SE.select(); G.state='SELECT'; G.fade=1; G.selCursor=Math.min(G.unlocked-1,G.planet+1); } }
@@ -472,7 +489,11 @@ function drawTop(planet){
   ctx.fillStyle='rgba(0,0,0,.4)'; ctx.fillRect(0,0,W,40);
   ctx.fillStyle=planet.accent; ctx.font='bold 18px sans-serif'; ctx.textAlign='left'; ctx.fillText('🪐 '+planet.name,14,26);
   ctx.fillStyle='#fff'; ctx.textAlign='right'; ctx.font='bold 15px sans-serif';
-  ctx.fillText(planet.boss?'ヌシ討伐戦':`さかな ${G.planetProgress[G.planet]} / ${TARGET[G.planet]}`,W-14,25); ctx.textAlign='left';
+  let lab;
+  if(G.nushiDone[G.planet]) lab='★ ヌシ討伐ずみ';
+  else if(isNushiTime()) lab='✦ ヌシ出現中 ✦';
+  else lab=`ヌシまで あと ${Math.max(0,QUOTA[G.planet]-G.planetProgress[G.planet])}匹`;
+  ctx.fillText(lab,W-14,25); ctx.textAlign='left';
 }
 function bar(x,y,w,h,v,col,label){ roundRect(ctx,x,y,w,h,h/2); ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fill();
   roundRect(ctx,x,y,w*U.clamp(v,0,1),h,h/2); ctx.fillStyle=col; ctx.fill();
@@ -534,7 +555,7 @@ function resultScreen(){
   ctx.fillStyle='#ffd34d'; ctx.font='18px sans-serif'; ctx.fillText('レア度 '+'★'.repeat(d.tier),W/2,406);
   const uniq=new Set(G.caught.map(c=>c.id)).size; ctx.fillStyle='#aab'; ctx.font='14px sans-serif';
   ctx.fillText(`ずかん ${uniq} / ${FISH_DB.length}　総釣果 ${G.caught.length}`,W/2,442);
-  pulseC((G.planetProgress[G.planet]>=TARGET[G.planet]?'結果へ':'つづける'),H-60,'#ffd34d'); ctx.textAlign='left';
+  pulseC((d.boss?'結果へ':'つづける'),H-60,'#ffd34d'); ctx.textAlign='left';
 }
 function pulseC(text,y,col){ const s=1+Math.sin(G.t*8)*0.06; ctx.save(); ctx.translate(W/2,y); ctx.scale(s,s);
   ctx.fillStyle=col; ctx.font='bold 20px sans-serif'; ctx.textAlign='center'; ctx.fillText((touchMode()?'タップで':'○ で')+text,0,0); ctx.restore(); }
@@ -584,7 +605,9 @@ function renderSelect(){
   if(locked){ ctx.fillStyle='#fff'; ctx.font='bold 40px sans-serif'; ctx.fillText('🔒',cx,cy+14); }
   ctx.fillStyle=planet.accent; ctx.font='bold 30px sans-serif'; ctx.fillText(planet.name,cx,cy+r+50);
   ctx.fillStyle='#aab'; ctx.font='15px sans-serif'; ctx.fillText(planet.sub+'  難易度 '+planet.diff,cx,cy+r+74);
-  if(!locked){ ctx.fillStyle='#9fd'; ctx.font='14px sans-serif'; ctx.fillText(`さかな ${G.planetProgress[G.selCursor]} / ${TARGET[G.selCursor]}`,cx,cy+r+98); }
+  if(!locked){ ctx.fillStyle='#9fd'; ctx.font='14px sans-serif';
+    const sc=G.selCursor;
+    ctx.fillText(G.nushiDone[sc]?'★ ヌシ討伐ずみ':`ヌシまで ${Math.min(G.planetProgress[sc],QUOTA[sc])} / ${QUOTA[sc]}`,cx,cy+r+98); }
   ctx.fillStyle='rgba(255,255,255,.5)'; ctx.font='bold 40px sans-serif'; ctx.fillText('‹',cx-r-50,cy+14); ctx.fillText('›',cx+r+50,cy+14);
   for(let i=0;i<PLANETS.length;i++){ const dx=cx-(PLANETS.length-1)*14+i*28; ctx.beginPath(); ctx.arc(dx,H-46,7,0,U.TAU);
     ctx.fillStyle=i===G.selCursor?'#fff':(i<G.unlocked?'#6ad':'#444'); ctx.fill(); }
