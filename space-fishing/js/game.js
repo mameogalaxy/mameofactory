@@ -315,7 +315,7 @@ function render(){
   let target=null;
   if(G.state==='FLY') target={x:S.lure.x,y:S.lure.y};
   else if(G.state==='WAIT'||G.state==='HOOK') target={x:S.floatX,y:WL-2+Math.sin(S.floatBob*4)*3};
-  else if(G.state==='FIGHT'||G.state==='CATCH') target={x:S.fishX,y:S.fishY};
+  else if(G.state==='FIGHT') target={x:S.fishX,y:S.fishY};
   if(target){ const danger=G.state==='FIGHT'&&S.tension>0.8*100;
     ctx.strokeStyle=danger?'rgba(255,70,70,.95)':'rgba(255,255,255,.8)'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(tip.x,tip.y);
@@ -327,7 +327,7 @@ function render(){
   if(G.state==='CAST') drawAim(planet);
   if(G.state==='FLY') drawLure();
   if(G.state==='WAIT'||G.state==='HOOK'){ drawUnderwaterFish(); drawFloat(); if(G.state==='HOOK') drawHookMark(); }
-  if(G.state==='FIGHT'||G.state==='CATCH') drawFightFish();
+  if(G.state==='FIGHT') drawFightFish();
   drawP();
 
   // HUD
