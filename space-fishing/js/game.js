@@ -205,6 +205,9 @@ function updateFly(dt){
   L.y=U.lerp(L.fromY,L.toY,k) - Math.sin(k*Math.PI)*150;   // 放物線
   if(k>=1){ Sound.SE.splash(); burst(S.floatX,WL,16,{c:'#bff',smax:4,up:2,lmax:0.6,rmax:4,g:0.06});
     G.state='WAIT'; S.waitT=0; S.nibble=0; S.biteFish=null; S.floatBob=0;
+    // 魚が居なくならないよう補充（バラした魚で枯渇するバグ対策）
+    if(isNushiTime()){ if(S.swimmers.length===0) resetSwimmers(); }
+    else if(S.swimmers.length<2) resetSwimmers();
     if(S.guaranteeBite){
       // パーフェクトキャスト：必ず1匹が食いつくようにロックして寄せる
       if(S.swimmers.length===0) resetSwimmers();
@@ -364,10 +367,10 @@ function updateFight(dt){
   const reeling=reelAmt>0.05;
 
   if(!koed){
-    // 魚は常に引いている：何もしなくてもテンションは上がり続ける（放置＝バレる）
-    let ten=(S.mode==='run'?9:3)*(0.7+S.fish.power*0.3)*(0.85+0.25*B.w);
+    // 魚は常に引いている：何もしないと少しずつ上がる（ゆっくり）。巻きの無理が一番危険
+    let ten=(S.mode==='run'?5:2)*(0.7+S.fish.power*0.25)*(0.9+0.2*B.w);
     if(reeling){
-      if(S.mode==='run'){ ten+=reelAmt*38; S.progress=Math.max(0,S.progress-reelAmt*dt*3); if(Math.random()<0.2)Sound.SE.warn(); }
+      if(S.mode==='run'){ ten+=reelAmt*32; S.progress=Math.max(0,S.progress-reelAmt*dt*3); if(Math.random()<0.2)Sound.SE.warn(); }
       else { ten+=reelAmt*5; S.progress+=reelAmt*dt*16/B.w; S.eleki+=reelAmt*dt*4; if(Math.random()<0.3)Sound.SE.reel(); }
       S.charge += dt*30;               // 巻いている時だけ こうげきゲージがたまる
     }
