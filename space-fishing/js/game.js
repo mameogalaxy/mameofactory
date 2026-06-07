@@ -16,10 +16,17 @@ const NEAR_X = 300;    // 寄せきった位置
 const PINCH  = 82;     // この値以上でピンチ（救済エレキがたまる）
 
 const G = {
-  state:'LOADING', t:0, planet:0, selCursor:0, unlocked:1,
+  state:'LOADING', t:0, planet:0, selCursor:0, unlocked:1, difficulty:1,
   caught:[], planetProgress:[0,0,0,0,0], nushiDone:[false,false,false,false,false],
   shake:0, flash:0, flashCol:'255,255,255', msg:null, msgT:0, fade:1,
 };
+// 難易度：tenMul=テンションの上がりやすさ hpMul=魚の体力 fillMul=こうげき/エレキの溜まり reachMul=寄せ上限のキツさ runMul=暴れの長さ
+const DIFF = [
+  {key:'easy',   name:'イージー', sub:'のんびり', col:'#7fff8a', tenMul:0.62, hpMul:0.7,  fillMul:1.35, reachMul:0.7, runMul:0.8 },
+  {key:'normal', name:'ふつう',   sub:'てごたえ', col:'#ffd34d', tenMul:1.0,  hpMul:1.0,  fillMul:1.0,  reachMul:1.0, runMul:1.0 },
+  {key:'hard',   name:'ハード',   sub:'ガチ勝負', col:'#ff6b6b', tenMul:1.5,  hpMul:1.5,  fillMul:0.78, reachMul:1.25,runMul:1.3 },
+];
+function D(){ return DIFF[G.difficulty]||DIFF[1]; }
 // 各惑星でヌシが現れるまでに釣る通常魚の数（惑星4はいきなりヌシ）
 const QUOTA = [2,2,3,3,0];
 function isNushiTime(){ return !G.nushiDone[G.planet] && G.planetProgress[G.planet] >= QUOTA[G.planet]; }
@@ -30,9 +37,10 @@ try{
   if(s.caught) G.caught=s.caught;
   if(s.planetProgress) G.planetProgress=s.planetProgress;
   if(s.nushiDone) G.nushiDone=s.nushiDone;
+  if(typeof s.difficulty==='number') G.difficulty=s.difficulty;
 }catch(e){}
 function save(){ try{ localStorage.setItem('stellar_angler', JSON.stringify({
-  unlocked:G.unlocked, caught:G.caught, planetProgress:G.planetProgress, nushiDone:G.nushiDone })); }catch(e){} }
+  unlocked:G.unlocked, caught:G.caught, planetProgress:G.planetProgress, nushiDone:G.nushiDone, difficulty:G.difficulty })); }catch(e){} }
 function toast(t,d=2.2){ G.msg=t; G.msgT=d; }
 function flash(a=0.6,c='255,255,255'){ G.flash=a; G.flashCol=c; }
 
@@ -127,7 +135,10 @@ function updateTitle(dt){
   if(!btns[0].enabled) titleSel=1;
   const up=(IN.LY<-0.5||IN.RY<-0.5), dn=(IN.LY>0.5||IN.RY>0.5);
   if((up||dn)&&titleCD<=0){ titleSel=up?0:1; if(!btns[0].enabled) titleSel=1; titleCD=0.2; Sound.SE.move(); }
+  const lf=(IN.LX<-0.5||IN.RX<-0.5), rt=(IN.LX>0.5||IN.RX>0.5);
+  if((lf||rt)&&titleCD<=0){ G.difficulty=U.clamp(G.difficulty+(rt?1:-1),0,DIFF.length-1); titleCD=0.2; Sound.SE.move(); save(); }
   if(IN.touch.active && IN.touch.tap){
+    for(const r of diffRects()){ if(inRect(IN.touch.tapX,IN.touch.tapY,r)){ G.difficulty=r.i; Sound.SE.move(); save(); return; } }
     for(let i=0;i<btns.length;i++){ const b=btns[i];
       if(Math.abs(IN.touch.tapX-W/2)<140 && Math.abs(IN.touch.tapY-b.y)<26){
         if(b.enabled){ titleSel=i; confirmTitle(); } else { Sound.SE.back(); toast('セーブデータがありません'); }
@@ -321,7 +332,7 @@ function beh(d){
   return M[d.temper]||M.steady;
 }
 function startFight(s){
-  const d=s.d; S.fish=d; S.fishMax=d.hp; S.fishHP=d.hp; S.beh=beh(d);
+  const d=s.d; S.fish=d; S.fishMax=Math.round(d.hp*D().hpMul); S.fishHP=S.fishMax; S.beh=beh(d);
   S.tension=18; S.progress=0; S.charge=0; S.eleki=0; S.pinch=false;
   S.mode='run'; S.modeT=U.rand(1.0,1.8)*S.beh.rd; S.koTimer=0; S.hitFx=0; S.elekiFx=0;
   S.fishX=FAR_X; S.fishY=WL-30; setJump(true);
@@ -353,12 +364,12 @@ function doEleki(){
 }
 function updateFight(dt){
   const koed=S.fishHP<=0;
-  const B=S.beh||beh(S.fish);
-  // 暴れサイクル（性格で頻度・長さが変化）
+  const B=S.beh||beh(S.fish), DF=D();
+  // 暴れサイクル（性格で頻度・長さが変化／難易度で暴れの長さが変わる）
   S.modeT-=dt;
   if(!koed && S.modeT<=0){
-    if(S.mode==='run'){ S.mode='tire'; S.modeT=U.rand(1.8,2.9)*(1+(1-S.fishHP/S.fishMax))/B.rr; setJump(false); }
-    else{ S.mode='run'; S.modeT=U.rand(0.8,1.5)*B.rd*(S.fishHP/S.fishMax+0.4); setJump(true); Sound.SE.warn(); }
+    if(S.mode==='run'){ S.mode='tire'; S.modeT=U.rand(1.8,2.9)*(1+(1-S.fishHP/S.fishMax))/B.rr/DF.runMul; setJump(false); }
+    else{ S.mode='run'; S.modeT=U.rand(0.8,1.5)*B.rd*(S.fishHP/S.fishMax+0.4)*DF.runMul; setJump(true); Sound.SE.warn(); }
   }
   // 入力 → reel / strike
   let reelAmt=0, strike=false;
@@ -377,11 +388,11 @@ function updateFight(dt){
       if(reeling){ ten += reelAmt*22; S.progress=Math.max(0,S.progress-reelAmt*dt*4); if(Math.random()<0.2)Sound.SE.warn(); }
     }else{
       // おとなしい時：テンションは上がらない（暴れてる時だけ上がる）。巻けば寄る／止めれば回復
-      if(reeling){ ten = -2; S.progress+=reelAmt*dt*16/B.w; S.eleki+=reelAmt*dt*5; S.charge+=dt*30; if(Math.random()<0.3)Sound.SE.reel(); }
+      if(reeling){ ten = -2; S.progress+=reelAmt*dt*16/B.w; S.eleki+=reelAmt*dt*5*DF.fillMul; S.charge+=dt*30*DF.fillMul; if(Math.random()<0.3)Sound.SE.reel(); }
       else ten = -8;     // 手を止めると回復（赤からの立て直しが可能）
     }
-    // ピンチ中はテンション上昇がゆるやかになり、立て直す猶予ができる
-    if(S.tension>=PINCH && ten>0) ten*=0.4;
+    if(ten>0) ten*=DF.tenMul;                 // 難易度でテンションの上がりやすさが変化
+    if(S.tension>=PINCH && ten>0) ten*=0.4;   // ピンチ中はゆるやかにして立て直す猶予
     S.tension += dt*ten;
   }else{
     S.tension=U.lerp(S.tension,8,dt*2); S.progress += reelAmt*dt*30;  // KO後も巻かないと寄らない
@@ -396,7 +407,7 @@ function updateFight(dt){
   S.charge=U.clamp(S.charge,0,100); S.progress=U.clamp(S.progress,0,100); S.eleki=U.clamp(S.eleki,0,100);
 
   // 寄せの上限は「魚の弱り具合（HP）」で決まる：弱らせないと最後まで寄らない＝巻くだけでは釣れない
-  const reach = koed?100:U.clamp(100-(S.fishHP/S.fishMax)*62,0,100);
+  const reach = koed?100:U.clamp(100-(S.fishHP/S.fishMax)*62*DF.reachMul,0,100);
   if(S.progress>reach) S.progress=reach;
   if(!koed && S.progress>=reach-0.5 && reach<99 && Math.random()<0.012) toast('もう寄らない…こうげき/エレキで弱らせろ！',1.2);
 
@@ -684,9 +695,12 @@ function hookHint(){
 }
 
 function fightHUD(){
-  // 魚の名前（スタミナゲージは表示しない）
-  ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif'; ctx.textAlign='center';
-  ctx.shadowColor='#000'; ctx.shadowBlur=6; ctx.fillText(S.fish.name, W/2, 64); ctx.shadowBlur=0; ctx.textAlign='left';
+  // 魚の名前（スタミナゲージは表示しない）＋難易度バッジ
+  ctx.textAlign='center';
+  ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif';
+  ctx.shadowColor='#000'; ctx.shadowBlur=6; ctx.fillText(S.fish.name, W/2, 64); ctx.shadowBlur=0;
+  ctx.fillStyle=D().col; ctx.font='bold 12px sans-serif'; ctx.fillText('[ '+D().name+' ]', W/2, 44);
+  ctx.textAlign='left';
   // テンション（横・危険ゾーン付き）
   const tx=W/2-170,ty=82,tw=340,th=14;
   roundRect(ctx,tx,ty,tw,th,7); ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fill();
@@ -789,8 +803,23 @@ function renderTitle(){
   ctx.fillStyle='#39e0ff'; ctx.font='bold 60px sans-serif'; ctx.shadowColor='#39e0ff'; ctx.shadowBlur=26; ctx.fillText('STELLAR ANGLER',0,bob); ctx.shadowBlur=0;
   ctx.fillStyle='#ffd34d'; ctx.font='bold 24px "Hiragino Maru Gothic Pro",sans-serif'; ctx.fillText('〜 伝説のヌシを求めて 〜',0,40+bob); ctx.restore();
   drawTitleButtons();
+  drawDifficulty();
   ctx.fillStyle='#7f9'; ctx.font='13px sans-serif'; ctx.textAlign='center';
-  ctx.fillText(touchMode()?'ボタンをタップ':'↑↓で選択 ○/SPACEで決定',W/2,H-26);
+  ctx.fillText(touchMode()?'ボタンをタップ・むずかしさも選べる':'↑↓で選択 ←→でむずかしさ ○/SPACEで決定',W/2,H-22);
+  ctx.textAlign='left';
+}
+function diffRects(){ const w=128,h=46,gap=12,y=486,total=w*3+gap*2,x0=W/2-total/2;
+  return DIFF.map((d,i)=>({x:x0+i*(w+gap), y:y-h/2, w, h, i})); }
+function drawDifficulty(){
+  ctx.fillStyle='#cfe'; ctx.font='bold 15px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('▼ むずかしさ ▼',W/2,452);
+  for(const r of diffRects()){ const d=DIFF[r.i], sel=r.i===G.difficulty;
+    roundRect(ctx,r.x,r.y,r.w,r.h,10);
+    ctx.fillStyle=sel?d.col:'rgba(255,255,255,.10)'; ctx.fill();
+    if(sel){ ctx.lineWidth=3; ctx.strokeStyle='#fff'; roundRect(ctx,r.x,r.y,r.w,r.h,10); ctx.stroke(); }
+    ctx.fillStyle=sel?'#03203a':'#fff'; ctx.font='bold 19px sans-serif'; ctx.fillText(d.name,r.x+r.w/2,r.y+22);
+    ctx.fillStyle=sel?'#03203a':'#9ab'; ctx.font='11px sans-serif'; ctx.fillText(d.sub,r.x+r.w/2,r.y+37);
+  }
   ctx.textAlign='left';
 }
 function drawTitleButtons(){
