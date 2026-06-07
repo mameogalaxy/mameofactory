@@ -158,18 +158,19 @@ function enterPlanet(){
   if(isNushiTime()) toast('✦ この星のヌシ「'+nushiForPlanet(G.planet).name+'」が潜んでいる…！',3.4);
   else toast(PLANETS[G.planet].name+'に到着！ '+(touchMode()?'長押しでパワーをためて離すと投げる':'○長押しでパワー、離して投げる'),3.0);
 }
-function resetCast(){ S.power=0.1; S.powerDir=1; S.charging=false; S.aimX=AX+200; }
+function resetCast(){ S.power=0.08; S.powerDir=1; S.charging=false; S.aimX=AX+200; }
 
-// ---------------- CAST（パワーメーターで飛距離を決めて投げる。位置スライドなし）----------------
+// ---------------- CAST（ゲージが左右に振れ、離した所で止まる。MAX付近でレア/大型/ヌシ）----------------
 function castPreviewX(){ return U.lerp(AX+200, W-70, S.power); }
 function updateCast(dt){
   if(IN.p.cross){ Sound.SE.back(); G.state='SELECT'; G.fade=1; return; }
   const holding = IN.touch.active ? IN.touch.down : IN.circle;
   if(holding){
-    // 押している間パワーが溜まり、MAXで止まる。短ければ手前・長く溜めれば奥
-    S.power = Math.min(1, S.power + dt*1.0);
+    // ゲージは常に上下（左右）に振れる。押しっぱでMAXにはならない＝離すタイミングがコツ
+    S.power += S.powerDir*dt*1.35;
+    if(S.power>=1){ S.power=1; S.powerDir=-1; }
+    if(S.power<=0.08){ S.power=0.08; S.powerDir=1; }
     S.charging=true;
-    if(Math.random()<0.25) Sound.SE.reel();
   }else if(S.charging){
     doCast();
   }
@@ -177,10 +178,24 @@ function updateCast(dt){
 function doCast(){
   Sound.SE.cast();
   S.charging=false;
+  S.castPower=S.power;
+  S.goodCast = S.power>=0.9 ? 2 : (S.power>=0.75 ? 1 : 0);  // MAX付近=パーフェクト
   S.floatX=castPreviewX();
   const hand=handPos();
   S.lure={x:hand.x,y:hand.y, t:0, dur:0.5, fromX:hand.x, fromY:hand.y, toX:S.floatX, toY:WL};
+  if(S.goodCast){ Sound.SE.select(); flash(0.3,'255,240,180');
+    toast(S.goodCast===2?'✦ パーフェクトキャスト！ 大物の予感…':'ナイスキャスト！',2.0); }
   G.state='FLY';
+}
+// キャスト品質で釣れる魚を決める（MAX付近＝レア/大型/ヌシ）
+function pickCastFish(species){
+  const q=S.castPower||0, planet=G.planet;
+  if(isNushiTime()) return species;                       // 既にヌシ狙い
+  if(q>=0.9 && !G.nushiDone[planet] && nushiForPlanet(planet) && Math.random()<0.5) return nushiForPlanet(planet);
+  const pool=normalFishForPlanet(planet).slice().sort((a,b)=>a.tier-b.tier);
+  if(q>=0.9) return pool[pool.length-1];                  // 最高レア
+  if(q>=0.75 && Math.random()<0.7) return pool[pool.length-1];
+  return species;
 }
 function updateFly(dt){
   const L=S.lure; L.t+=dt;
@@ -204,7 +219,7 @@ function updateWait(dt){
     if(S.nibble>U.rand(0.7,1.4)) triggerBite(best);
   }else S.nibble=Math.max(0,S.nibble-dt*0.6);
 }
-function triggerBite(s){ Sound.SE.bite(); S.biteFish=s; S.biteWindow=1.1; G.shake=6; G.state='HOOK'; }
+function triggerBite(s){ s.d=pickCastFish(s.d); Sound.SE.bite(); S.biteFish=s; S.biteWindow=1.1; G.shake=6; G.state='HOOK'; }
 function updateSwimmers(dt,lure){
   for(const s of S.swimmers){ s.phase+=dt;
     if(lure && s.state!=='approach' && Math.abs(s.x-S.floatX)<260 && Math.random()<0.015*s.d.speed) s.state='approach';
@@ -283,7 +298,7 @@ function setJump(big){
 }
 function doAttack(){
   if(S.charge<100||S.fishHP<=0) return false;
-  const dmg=S.fishMax*0.16+28; S.fishHP-=dmg; S.charge=0; S.tension=Math.max(0,S.tension-10);
+  const dmg=S.fishMax*0.16+28; S.fishHP-=dmg; S.charge=0; S.tension=Math.max(0,S.tension-24);
   S.mode='tire'; S.modeT=Math.max(S.modeT,1.0); S.hitFx=0.4; G.shake=8; Sound.SE.attack();
   burst(S.fishX,S.fishY,16,{c:'#ffd34d',smax:6,lmax:0.8,rmax:6,glow:true}); toast('こうげき！');
   return true;
@@ -313,21 +328,18 @@ function updateFight(dt){
   const reeling=reelAmt>0.05;
 
   if(!koed){
-    if(S.mode==='run'){
-      // 暴れ中：放置では少ししか上がらないが、巻くと急上昇＆逆に出される
-      S.tension += dt*(3 + reelAmt*48)*(0.5 + S.fish.power*0.5)*(0.85+0.3*B.w);
-      if(reeling){ S.progress = Math.max(0, S.progress - reelAmt*dt*3); if(Math.random()<0.2) Sound.SE.warn(); }
-    }else{
-      // おとなしい時：巻いて寄せる唯一のチャンス（重い魚ほど寄せにくい）
-      S.tension += dt*(reelAmt*4 - 7);
-      S.progress += reelAmt*dt*16/B.w;
-      if(reeling && Math.random()<0.3) Sound.SE.reel();
+    // 魚は常に引いている：何もしなくてもテンションは上がり続ける（放置＝バレる）
+    let ten=(S.mode==='run'?9:3)*(0.7+S.fish.power*0.3)*(0.85+0.25*B.w);
+    if(reeling){
+      if(S.mode==='run'){ ten+=reelAmt*38; S.progress=Math.max(0,S.progress-reelAmt*dt*3); if(Math.random()<0.2)Sound.SE.warn(); }
+      else { ten+=reelAmt*5; S.progress+=reelAmt*dt*16/B.w; if(Math.random()<0.3)Sound.SE.reel(); }
+      S.charge += dt*30;               // 巻いている時だけ こうげきゲージがたまる
     }
-    S.charge += dt*(reeling?24:0);     // 巻いている時だけ こうげきゲージがたまる
+    S.tension += dt*ten;               // テンションを下げる手段は こうげき／エレキ のみ
   }else{
     S.tension=U.lerp(S.tension,8,dt*2); S.progress += reelAmt*dt*30;  // KO後も巻かないと寄らない
   }
-  S.tension-=dt*2.5; S.tension=U.clamp(S.tension,0,100);
+  S.tension=U.clamp(S.tension,0,100);
   S.charge=U.clamp(S.charge,0,100); S.progress=U.clamp(S.progress,0,100);
 
   const wasPinch=S.pinch; S.pinch=S.tension>=80&&!koed;
@@ -358,7 +370,8 @@ function updateFight(dt){
   if(S.progress>=100) landFish();
 }
 function landFish(){
-  const d=S.fish; const cm=Math.round((30+d.size*60)*U.rand(0.7,1.5));
+  const d=S.fish; const sizeBonus=1+((S.castPower||0)>=0.75?0.25*S.castPower:0); // 良いキャストほど大型
+  const cm=Math.round((30+d.size*60)*U.rand(0.7,1.5)*sizeBonus);
   S.caughtData={id:d.id,name:d.name,cm,tier:d.tier,boss:!!d.boss,t:Date.now()};
   G.caught.push(S.caughtData);
   if(!d.boss) G.planetProgress[G.planet]++;   // ヌシ出現は通常魚の釣果数で進む
@@ -517,11 +530,16 @@ function drawAim(planet){
   ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.setLineDash([7,7]); ctx.lineWidth=2; ctx.beginPath();
   for(let i=0;i<=20;i++){ const k=i/20; const x=U.lerp(hand.x,px,k); const y=U.lerp(hand.y,WL,k)-Math.sin(k*Math.PI)*150;
     i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); } ctx.stroke(); ctx.setLineDash([]);
-  // パワーメーター（キャラのそば・横バー）
-  const bx=AX-30, by=WL+34, bw=180, bh=16;
-  ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; ctx.textAlign='left'; ctx.fillText('パワー（長押しで調整→離す）',bx,by-6);
-  roundRect(ctx,bx,by,bw,bh,8); ctx.fillStyle='rgba(255,255,255,.18)'; ctx.fill();
-  roundRect(ctx,bx,by,bw*S.power,bh,8); ctx.fillStyle=S.power>0.85?'#ff5252':(S.power>0.6?'#ffd34d':'#7fd'); ctx.fill();
+  // パワーメーター（左右に振れる。MAX付近のゴールド帯で離すとレア/大型/ヌシ）
+  const bx=AX-30, by=WL+34, bw=200, bh=18;
+  ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; ctx.textAlign='left'; ctx.fillText('パワー：ゲージを見て離す！ 右端=大物のチャンス',bx,by-6);
+  roundRect(ctx,bx,by,bw,bh,9); ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fill();
+  // MAXスイートゾーン
+  roundRect(ctx,bx+bw*0.9,by,bw*0.1,bh,4); ctx.fillStyle='rgba(255,211,77,.5)'; ctx.fill();
+  // 現在値
+  roundRect(ctx,bx,by,bw*S.power,bh,9); ctx.fillStyle=S.power>=0.9?'#ffd34d':(S.power>=0.75?'#ffe98a':'#7fd'); ctx.fill();
+  // つまみ
+  ctx.fillStyle='#fff'; ctx.fillRect(bx+bw*S.power-2,by-3,4,bh+6);
   ctx.textAlign='left';
 }
 function drawLure(){ ctx.fillStyle='#ff5252'; ctx.beginPath(); ctx.arc(S.lure.x,S.lure.y,6,0,U.TAU); ctx.fill();
