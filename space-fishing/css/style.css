@@ -61,46 +61,8 @@ canvas{
 #loadbar{height:100%;width:0;background:linear-gradient(90deg,#39e0ff,#ffd34d);transition:width .2s}
 .hidden{opacity:0;pointer-events:none}
 
-/* ===== スマホ用タッチ操作 ===== */
-.touch{position:absolute;inset:0;display:none;z-index:6}
-body.touch-on .touch{display:block}
+/* タッチ環境ではPC用ヒントを隠す */
 body.touch-on .hint{display:none}
-.stick{
-  position:absolute;bottom:4%;
-  width:26%;max-width:150px;aspect-ratio:1;
-  border-radius:50%;
-  background:rgba(255,255,255,.06);
-  border:2px solid rgba(255,255,255,.2);
-  touch-action:none;-webkit-tap-highlight-color:transparent;
-}
-#stickL{left:2%}
-#stickR{right:30%}
-.knob{
-  position:absolute;left:50%;top:50%;
-  width:44%;aspect-ratio:1;
-  transform:translate(-50%,-50%);
-  border-radius:50%;
-  background:rgba(57,224,255,.3);
-  border:2px solid rgba(255,255,255,.5);
-}
-.stick span{
-  position:absolute;left:0;right:0;bottom:-20px;
-  text-align:center;font-size:11px;color:#9fb6c9;white-space:nowrap;
-}
-.btns{position:absolute;right:1%;bottom:3%;width:28%;max-width:170px;aspect-ratio:1}
-.tbtn{
-  position:absolute;
-  width:46%;aspect-ratio:1;
-  border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  font-size:6vmin;font-weight:bold;color:#fff;
-  touch-action:none;user-select:none;-webkit-user-select:none;
-  -webkit-tap-highlight-color:transparent;
-}
-.tbtn:active{filter:brightness(1.6)}
-.b-cir{right:2%;bottom:30%;background:rgba(255,90,90,.4);border:2px solid #ff9a9a}
-.b-tri{right:46%;bottom:62%;background:rgba(90,255,160,.35);border:2px solid #8affc0}
-.b-cro{right:46%;bottom:2%;background:rgba(120,180,255,.35);border:2px solid #9cf}
 
 .rotate{
   display:none;
