@@ -166,10 +166,8 @@ function updateCast(dt){
   if(IN.p.cross){ Sound.SE.back(); G.state='SELECT'; G.fade=1; return; }
   const holding = IN.touch.active ? IN.touch.down : IN.circle;
   if(holding){
-    // パワーメーターが上下に振れる（タイミングで飛距離が決まる）
-    S.power += S.powerDir*dt*1.25;
-    if(S.power>=1){ S.power=1; S.powerDir=-1; }
-    if(S.power<=0.1){ S.power=0.1; S.powerDir=1; }
+    // 押している間パワーが溜まり、MAXで止まる。短ければ手前・長く溜めれば奥
+    S.power = Math.min(1, S.power + dt*1.0);
     S.charging=true;
     if(Math.random()<0.25) Sound.SE.reel();
   }else if(S.charging){
@@ -316,18 +314,18 @@ function updateFight(dt){
 
   if(!koed){
     if(S.mode==='run'){
-      // 暴れ中：巻くとテンション急上昇＆逆に引き出される（寄らない）。重い魚ほど引きが強い
-      S.tension += dt*(10 + reelAmt*44)*(0.5 + S.fish.power*0.5)*(0.85+0.3*B.w);
+      // 暴れ中：放置では少ししか上がらないが、巻くと急上昇＆逆に出される
+      S.tension += dt*(3 + reelAmt*48)*(0.5 + S.fish.power*0.5)*(0.85+0.3*B.w);
       if(reeling){ S.progress = Math.max(0, S.progress - reelAmt*dt*3); if(Math.random()<0.2) Sound.SE.warn(); }
     }else{
-      // おとなしい時：安全に巻ける唯一のチャンス。重い魚ほど寄せにくい
+      // おとなしい時：巻いて寄せる唯一のチャンス（重い魚ほど寄せにくい）
       S.tension += dt*(reelAmt*4 - 7);
       S.progress += reelAmt*dt*16/B.w;
       if(reeling && Math.random()<0.3) Sound.SE.reel();
     }
-    S.charge += dt*(reeling?22:13);               // アクションゲージ
+    S.charge += dt*(reeling?24:0);     // 巻いている時だけ こうげきゲージがたまる
   }else{
-    S.tension=U.lerp(S.tension,8,dt*2); S.progress+=(reelAmt+1.4)*dt*22;
+    S.tension=U.lerp(S.tension,8,dt*2); S.progress += reelAmt*dt*30;  // KO後も巻かないと寄らない
   }
   S.tension-=dt*2.5; S.tension=U.clamp(S.tension,0,100);
   S.charge=U.clamp(S.charge,0,100); S.progress=U.clamp(S.progress,0,100);
