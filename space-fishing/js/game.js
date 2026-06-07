@@ -224,11 +224,28 @@ function updateWait(dt){
   let best=null,bd=999;
   for(const s of S.swimmers){ if(s.state==='approach'){ const d=Math.abs(s.x-S.floatX)+Math.abs((s.y)-(WL+30)); if(d<bd){bd=d;best=s;} } }
   if(best && Math.abs(best.x-S.floatX)<46){
-    S.nibble+=dt; if(Math.random()<0.06){ Sound.SE.reel(); }
-    if(S.nibble>U.rand(0.7,1.4)) triggerBite(best);
+    S.nibble+=dt;
+    if(S.nibble>U.rand(0.5,1.0)) triggerBite(best);
   }else S.nibble=Math.max(0,S.nibble-dt*0.6);
 }
-function triggerBite(s){ s.d=pickCastFish(s.d); S.guaranteeBite=false; Sound.SE.bite(); S.biteFish=s; S.biteWindow=1.1; G.shake=6; G.state='HOOK'; }
+// あつ森風：前アタリ(ピクッ)を数回→本アタリ(ガクッ)。本アタリだけ合わせる。魚で難度差
+function makeBiteSeq(d){
+  const fakes={darty:1,steady:1,jumper:2,aggro:2,heavy:2,wild:3}[d.temper] ?? 1;
+  const realWin={darty:0.42,steady:0.6,jumper:0.5,aggro:0.46,heavy:0.72,wild:0.38}[d.temper] ?? 0.55;
+  const seq=[{k:'gap',t:U.rand(0.3,0.6)}];
+  for(let i=0;i<fakes;i++){ seq.push({k:'fake',t:U.rand(0.18,0.32)}); seq.push({k:'gap',t:U.rand(0.45,0.9)}); }
+  seq.push({k:'real',t:realWin});
+  seq.push({k:'end',t:0.5});
+  return seq;
+}
+function hookPhase(){ return (S.biteSeq&&S.biteSeq[S.seqI])?S.biteSeq[S.seqI].k:'gap'; }
+function phaseSound(){ const k=hookPhase(); if(k==='fake') Sound.SE.reel(); else if(k==='real'){ Sound.SE.bite(); G.shake=6; } }
+function triggerBite(s){
+  s.d=pickCastFish(s.d); S.guaranteeBite=false; S.biteFish=s;
+  S.biteSeq=makeBiteSeq(s.d); S.seqI=0; S.seqT=0; G.state='HOOK'; phaseSound();
+}
+function biteMiss(msg){ if(S.biteFish){ S.biteFish.state='wander'; S.biteFish.locked=false; }
+  startEscape(S.biteFish.d, S.floatX, WL-6, msg); }
 function updateSwimmers(dt,lure){
   for(const s of S.swimmers){ s.phase+=dt;
     if(lure && s.state!=='approach' && Math.abs(s.x-S.floatX)<260 && Math.random()<0.015*s.d.speed) s.state='approach';
@@ -244,11 +261,20 @@ function updateSwimmers(dt,lure){
   }
 }
 
-// ---------------- HOOK（合わせる）----------------
+// ---------------- HOOK（前アタリ→本アタリ。本アタリで合わせる）----------------
 function updateHook(dt){
-  S.biteWindow-=dt;
-  if(uiConfirm()){ startFight(S.biteFish); return; }
-  if(S.biteWindow<=0){ S.biteFish.state='wander'; S.biteFish.locked=false; startEscape(S.biteFish.d, S.floatX, WL-6, 'バレた！'); }
+  const k=hookPhase();
+  if(uiConfirm()){                       // 合わせた
+    if(k==='real') startFight(S.biteFish);
+    else biteMiss('はやい！');           // 前アタリ/空合わせ＝バラシ
+    return;
+  }
+  S.seqT+=dt;
+  if(S.seqT>=S.biteSeq[S.seqI].t){
+    S.seqI++; S.seqT=0;
+    if(!S.biteSeq[S.seqI] || S.biteSeq[S.seqI].k==='end'){ biteMiss('のがした…'); return; }
+    phaseSound();
+  }
 }
 
 // ---------------- ESCAPE（バレた／逃走モーション）----------------
@@ -308,6 +334,7 @@ function setJump(big){
 function doAttack(){
   if(S.charge<100||S.fishHP<=0) return false;
   const dmg=S.fishMax*0.16+28; S.fishHP-=dmg; S.charge=0; S.tension=Math.max(0,S.tension-24);
+  S.eleki=U.clamp(S.eleki+34,0,100);   // こうげき成功でエレキがたまる
   S.mode='tire'; S.modeT=Math.max(S.modeT,1.0); S.hitFx=0.4; G.shake=8; Sound.SE.attack();
   burst(S.fishX,S.fishY,16,{c:'#ffd34d',smax:6,lmax:0.8,rmax:6,glow:true}); toast('こうげき！');
   return true;
@@ -341,7 +368,7 @@ function updateFight(dt){
     let ten=(S.mode==='run'?9:3)*(0.7+S.fish.power*0.3)*(0.85+0.25*B.w);
     if(reeling){
       if(S.mode==='run'){ ten+=reelAmt*38; S.progress=Math.max(0,S.progress-reelAmt*dt*3); if(Math.random()<0.2)Sound.SE.warn(); }
-      else { ten+=reelAmt*5; S.progress+=reelAmt*dt*16/B.w; if(Math.random()<0.3)Sound.SE.reel(); }
+      else { ten+=reelAmt*5; S.progress+=reelAmt*dt*16/B.w; S.eleki+=reelAmt*dt*4; if(Math.random()<0.3)Sound.SE.reel(); }
       S.charge += dt*30;               // 巻いている時だけ こうげきゲージがたまる
     }
     S.tension += dt*ten;               // テンションを下げる手段は こうげき／エレキ のみ
@@ -349,11 +376,10 @@ function updateFight(dt){
     S.tension=U.lerp(S.tension,8,dt*2); S.progress += reelAmt*dt*30;  // KO後も巻かないと寄らない
   }
   S.tension=U.clamp(S.tension,0,100);
-  S.charge=U.clamp(S.charge,0,100); S.progress=U.clamp(S.progress,0,100);
+  S.charge=U.clamp(S.charge,0,100); S.progress=U.clamp(S.progress,0,100); S.eleki=U.clamp(S.eleki,0,100);
 
   const wasPinch=S.pinch; S.pinch=S.tension>=80&&!koed;
-  // エレキは「ピンチ中だけ」チャージ＝ピンチを耐えたご褒美の必殺技
-  if(S.pinch) S.eleki=U.clamp(S.eleki+dt*60,0,100);
+  // エレキは「成功（うまく寄せる・こうげき命中）」でたまるご褒美ゲージ
   if(S.pinch&&!wasPinch) Sound.SE.warn();
 
   if(S.tension>=100){ Sound.SE.snap(); G.shake=14; flash(0.5,'255,80,80');
@@ -450,7 +476,7 @@ function render(){
   // 状態別オブジェクト
   if(G.state==='CAST') drawAim(planet);
   if(G.state==='FLY') drawLure();
-  if(G.state==='WAIT'||G.state==='HOOK'){ drawUnderwaterFish(); drawFloat(); if(G.state==='HOOK') drawHookMark(); }
+  if(G.state==='WAIT'||G.state==='HOOK'){ drawUnderwaterFish(); drawFloat(); }
   if(G.state==='FIGHT') drawFightFish();
   if(G.state==='ESCAPE') drawEscape();
   drawP();
@@ -562,21 +588,28 @@ function drawUnderwaterFish(){
 }
 // ---- ウキ ----
 function drawFloat(){
-  const x=S.floatX, dip=(G.state==='WAIT'&&S.nibble>0.05)?Math.sin(G.t*22)*4*Math.min(1,S.nibble):0;
+  const x=S.floatX; let dip=Math.sin(S.floatBob*4)*2; let label=null;
+  if(G.state==='WAIT'){ if(S.nibble>0.05){ dip=Math.sin(G.t*22)*3*Math.min(1,S.nibble); } }
+  else if(G.state==='HOOK'){
+    const k=hookPhase();
+    if(k==='fake'){ dip=7+Math.sin(G.t*34)*3; label='ピクッ'; }
+    else if(k==='real'){ dip=30; label='！！'; }
+    else dip=Math.sin(G.t*4)*2;
+  }
   const y=WL+dip;
   // 波紋
   ctx.strokeStyle='rgba(255,255,255,.4)'; const rr=(S.floatBob*40)%34; ctx.globalAlpha=1-rr/34; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.ellipse(x,y, rr+6, (rr+6)*0.32,0,0,U.TAU); ctx.stroke(); ctx.globalAlpha=1;
-  // 本体（赤白ウキ）
+  ctx.beginPath(); ctx.ellipse(x,WL, rr+6, (rr+6)*0.32,0,0,U.TAU); ctx.stroke(); ctx.globalAlpha=1;
+  // 本体（赤白ウキ）：本アタリは深く沈む
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y-6,8,Math.PI,0); ctx.fill();
   ctx.fillStyle='#ff4040'; ctx.beginPath(); ctx.arc(x,y-6,8,0,Math.PI); ctx.fill();
   ctx.fillStyle='#ffcf2e'; ctx.beginPath(); ctx.arc(x,y-15,3,0,U.TAU); ctx.fill();
-  if(G.state==='WAIT'&&S.nibble>0.05){ ctx.fillStyle='#ffea00'; ctx.font='bold 22px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('ピクッ',x,y-34); ctx.textAlign='left'; }
+  // ラベル
+  if(label==='ピクッ'){ ctx.fillStyle='#ffe98a'; ctx.font='bold 20px sans-serif'; ctx.textAlign='center'; ctx.fillText('ピクッ',x,WL-36); ctx.textAlign='left'; }
+  else if(label==='！！'){ const s=1+Math.sin(G.t*24)*0.18; ctx.save(); ctx.translate(x,WL-46); ctx.scale(s,s);
+    ctx.fillStyle='#ffea00'; ctx.font='bold 44px sans-serif'; ctx.textAlign='center'; ctx.shadowColor='#fa0'; ctx.shadowBlur=18;
+    ctx.fillText('！',0,0); ctx.restore(); ctx.shadowBlur=0; ctx.textAlign='left'; }
 }
-function drawHookMark(){ const x=S.floatX; const s=1+Math.sin(G.t*20)*0.15;
-  ctx.fillStyle='#ffea00'; ctx.font=`bold ${46*s}px sans-serif`; ctx.textAlign='center'; ctx.shadowColor='#fa0'; ctx.shadowBlur=18;
-  ctx.fillText('！',x,WL-44); ctx.shadowBlur=0; ctx.textAlign='left'; }
 
 // ---- ファイトの魚（空中で暴れる）----
 function drawFightFish(){
@@ -624,7 +657,11 @@ function bigPrompt(text,col){ const s=1+Math.sin(G.t*10)*0.06; ctx.save(); ctx.t
 function waitHint(){ ctx.fillStyle='#cde'; ctx.font='bold 18px sans-serif'; ctx.textAlign='center';
   ctx.fillText('アタリを待て…',W/2,110); ctx.textAlign='left';
   hint('ウキがしずんだら合図／タップで投げ直し','ウキがしずんだら合図／×で投げ直し'); }
-function hookHint(){ bigPrompt(touchMode()?'いま！タップで合わせろ！':'いま！ ○ で合わせろ！','#ffea00'); }
+function hookHint(){
+  if(hookPhase()==='real') bigPrompt(touchMode()?'いま！タップで合わせろ！':'いま！ ○ で合わせろ！','#ffea00');
+  else bigPrompt('前アタリ…ガクッ！まで待て','#bcd');
+  hint('本アタリ（深く沈む！）で合わせる。早合わせはバラシ','本アタリ（深く沈む！）で○。早押しはバラシ');
+}
 
 function fightHUD(){
   // 魚スタミナ
@@ -639,14 +676,15 @@ function fightHUD(){
   // こうげき／エレキ ゲージ（役割の違いを見せる）
   const cv=S.charge/100, ev=S.eleki/100;
   bar(W/2-170,H-66,165,10, cv, cv>=1?'#ffd34d':'#cfa030', 'こうげき'+(cv>=1?' READY!':''));
-  bar(W/2+5,  H-66,165,10, ev, ev>=1?'#9cf':'#46618a', 'エレキ⚡'+(ev>=1?' READY!':'（ピンチでたまる）'));
+  bar(W/2+5,  H-66,165,10, ev, ev>=1?'#9cf':'#46618a', 'エレキ⚡'+(ev>=1?' READY!':'（成功でたまる）'));
   // 寄せ（LANDING）
   bar(W/2-170,H-44,340,12,S.progress/100,'#ffd34d','あと'+Math.max(0,Math.round(100-S.progress))+'%で GET');
 
   // 大きな状況プロンプト
   if(S.fishHP<=0) bigPrompt('ダウン！ 巻き上げろ！','#7fff8a');
   else if(S.pinch&&S.eleki>=100) bigPrompt(touchMode()?'⚡タップでエレキ反撃！':'⚡○でエレキ反撃！','#9cf');
-  else if(S.pinch) bigPrompt('ピンチ！ 巻くのを止めて耐えろ','#ff6b6b');
+  else if(S.pinch&&S.charge>=100) bigPrompt(touchMode()?'ピンチ！タップでこうげき！':'ピンチ！○でこうげき！','#ff6b6b');
+  else if(S.pinch) bigPrompt('ピンチ！ 巻くのを止めて！','#ff6b6b');
   else if(S.charge>=100) bigPrompt(touchMode()?'タップでこうげき！':'○でこうげき！','#ffd34d');
   else if(S.mode==='run') bigPrompt('ひっぱられてる！ 巻くのを止めて！','#ffb13b');
   else bigPrompt(touchMode()?'いまだ！ なぞって巻け！':'いまだ！ 巻け！','#7fff8a');
