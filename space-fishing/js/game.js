@@ -373,10 +373,11 @@ function updateFight(dt){
     if(S.mode==='run'){
       // 暴れ中：常にじわじわ上がる。巻くと急上昇＆逆に出される（手を止めて耐える）
       ten = 3.4*(0.7+S.fish.power*0.25)*(0.9+0.2*B.w);
-      if(reeling){ ten += reelAmt*14; S.progress=Math.max(0,S.progress-reelAmt*dt*3); if(Math.random()<0.2)Sound.SE.warn(); }
+      // 暴れ中に巻くと一気にテンション上昇＝危険（手を止めて耐えるのが正解）
+      if(reeling){ ten += reelAmt*22; S.progress=Math.max(0,S.progress-reelAmt*dt*4); if(Math.random()<0.2)Sound.SE.warn(); }
     }else{
       // おとなしい時：テンションは上がらない（暴れてる時だけ上がる）。巻けば寄る／止めれば回復
-      if(reeling){ ten = -2; S.progress+=reelAmt*dt*16/B.w; S.eleki+=reelAmt*dt*14; S.charge+=dt*30; if(Math.random()<0.3)Sound.SE.reel(); }
+      if(reeling){ ten = -2; S.progress+=reelAmt*dt*16/B.w; S.eleki+=reelAmt*dt*5; S.charge+=dt*30; if(Math.random()<0.3)Sound.SE.reel(); }
       else ten = -8;     // 手を止めると回復（赤からの立て直しが可能）
     }
     // ピンチ中はテンション上昇がゆるやかになり、立て直す猶予ができる
@@ -394,10 +395,17 @@ function updateFight(dt){
 
   S.charge=U.clamp(S.charge,0,100); S.progress=U.clamp(S.progress,0,100); S.eleki=U.clamp(S.eleki,0,100);
 
+  // 寄せの上限は「魚の弱り具合（HP）」で決まる：弱らせないと最後まで寄らない＝巻くだけでは釣れない
+  const reach = koed?100:U.clamp(100-(S.fishHP/S.fishMax)*62,0,100);
+  if(S.progress>reach) S.progress=reach;
+  if(!koed && S.progress>=reach-0.5 && reach<99 && Math.random()<0.012) toast('もう寄らない…こうげき/エレキで弱らせろ！',1.2);
+
   if(S.tension>=100){ Sound.SE.snap(); G.shake=14; flash(0.5,'255,80,80');
     startEscape(S.fish, S.fishX, S.fishY, 'ラインが切れた！'); return; }
 
-  if(strike){ if(!doEleki()) doAttack(); }
+  // エレキは満タンで自動発動（必ず使う・ド派手エフェクト）。こうげきも満タンで自動／タップで発動
+  if(S.eleki>=100){ doEleki(); }
+  else if(strike || S.charge>=100){ if(!doEleki()) doAttack(); }
   if(S.hitFx>0)S.hitFx-=dt; if(S.elekiFx>0)S.elekiFx-=dt;
 
   if(S.fishHP<=0 && S.koTimer===0){ S.fishHP=0; S.koTimer=0.001; Sound.SE.ko(); flash(0.5); toast('ダウン！ 巻き上げろ！',1.8); }
@@ -629,8 +637,8 @@ function drawFightFish(){
   const wild=(!koed&&S.mode==='run')?1:0.3;
   const tilt=Math.sin(G.t*7)*0.18*wild + (koed?0.9:0);
   const sc=2.2*S.fish.size;
-  // エレキ満タンの合図
-  if(S.eleki>=100&&!koed){ ctx.strokeStyle=`rgba(150,210,255,${0.5+0.4*Math.sin(G.t*20)})`; ctx.lineWidth=2; ctx.shadowColor='#9cf'; ctx.shadowBlur=10;
+  // エレキ充電中の合図（満タンで自動発動するので、たまっていく様子を見せる）
+  if(S.eleki>=78&&!koed){ ctx.strokeStyle=`rgba(150,210,255,${(0.3+0.5*(S.eleki-78)/22)*(0.6+0.4*Math.sin(G.t*20))})`; ctx.lineWidth=2; ctx.shadowColor='#9cf'; ctx.shadowBlur=10;
     for(let i=0;i<4;i++){ const a=G.t*3+i*1.6; ctx.beginPath(); let lx=x+Math.cos(a)*60,ly=y+Math.sin(a)*42;
       for(let j=0;j<4;j++){ lx+=U.rand(-12,12); ly+=U.rand(-12,12); j===0?ctx.moveTo(lx,ly):ctx.lineTo(lx,ly);} ctx.stroke(); } ctx.shadowBlur=0; }
   if(S.elekiFx>0){ ctx.strokeStyle=`rgba(180,230,255,${S.elekiFx})`; ctx.lineWidth=3; ctx.shadowColor='#9cf'; ctx.shadowBlur=12;
@@ -695,10 +703,8 @@ function fightHUD(){
 
   // 大きな状況プロンプト
   if(S.fishHP<=0) bigPrompt('ダウン！ 巻き上げろ！','#7fff8a');
-  else if(S.pinch&&S.eleki>=100) bigPrompt(touchMode()?'⚡タップでエレキ反撃！':'⚡○でエレキ反撃！','#9cf');
-  else if(S.pinch&&S.charge>=100) bigPrompt(touchMode()?'ピンチ！タップでこうげき！':'ピンチ！○でこうげき！','#ff6b6b');
-  else if(S.pinch) bigPrompt('ピンチ！ 巻くのを止めて！','#ff6b6b');
-  else if(S.charge>=100) bigPrompt(touchMode()?'タップでこうげき！':'○でこうげき！','#ffd34d');
+  else if(S.eleki>=78) bigPrompt('⚡エレキ充電完了でドカン！','#9cf');
+  else if(S.pinch) bigPrompt('ピンチ！ 巻くのを止めて耐えろ！','#ff6b6b');
   else if(S.mode==='run') bigPrompt('ひっぱられてる！ 巻くのを止めて！','#ffb13b');
   else bigPrompt(touchMode()?'いまだ！ なぞって巻け！':'いまだ！ 巻け！','#7fff8a');
 
