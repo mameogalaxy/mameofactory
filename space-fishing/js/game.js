@@ -337,7 +337,7 @@ function setJump(big){
 function doAttack(){
   if(S.charge<100||S.fishHP<=0) return false;
   const dmg=S.fishMax*0.16+28; S.fishHP-=dmg; S.charge=0; S.tension=Math.max(0,S.tension-24);
-  S.eleki=U.clamp(S.eleki+44,0,100);   // こうげき成功でエレキが大きくたまる
+  S.eleki=U.clamp(S.eleki+56,0,100);   // こうげき成功でエレキが大きくたまる
   S.mode='tire'; S.modeT=Math.max(S.modeT,1.0); S.hitFx=0.4; G.shake=8; Sound.SE.attack();
   burst(S.fishX,S.fishY,16,{c:'#ffd34d',smax:6,lmax:0.8,rmax:6,glow:true}); toast('こうげき！');
   return true;
@@ -355,7 +355,7 @@ function updateFight(dt){
   // 暴れサイクル（性格で頻度・長さが変化）
   S.modeT-=dt;
   if(!koed && S.modeT<=0){
-    if(S.mode==='run'){ S.mode='tire'; S.modeT=U.rand(0.9,1.6)*(1+(1-S.fishHP/S.fishMax))/B.rr; setJump(false); }
+    if(S.mode==='run'){ S.mode='tire'; S.modeT=U.rand(1.8,2.9)*(1+(1-S.fishHP/S.fishMax))/B.rr; setJump(false); }
     else{ S.mode='run'; S.modeT=U.rand(0.8,1.5)*B.rd*(S.fishHP/S.fishMax+0.4); setJump(true); Sound.SE.warn(); }
   }
   // 入力 → reel / strike
@@ -370,11 +370,11 @@ function updateFight(dt){
     let ten;
     if(S.mode==='run'){
       // 暴れ中：常にじわじわ上がる。巻くと急上昇＆逆に出される（手を止めて耐える）
-      ten = 7*(0.7+S.fish.power*0.25)*(0.9+0.2*B.w);
-      if(reeling){ ten += reelAmt*30; S.progress=Math.max(0,S.progress-reelAmt*dt*3); if(Math.random()<0.2)Sound.SE.warn(); }
+      ten = 4.4*(0.7+S.fish.power*0.25)*(0.9+0.2*B.w);
+      if(reeling){ ten += reelAmt*20; S.progress=Math.max(0,S.progress-reelAmt*dt*3); if(Math.random()<0.2)Sound.SE.warn(); }
     }else{
       // おとなしい時：テンションは上がらない（暴れてる時だけ上がる）。巻けば寄る／止めれば回復
-      if(reeling){ ten = -2; S.progress+=reelAmt*dt*16/B.w; S.eleki+=reelAmt*dt*9; S.charge+=dt*30; if(Math.random()<0.3)Sound.SE.reel(); }
+      if(reeling){ ten = -2; S.progress+=reelAmt*dt*16/B.w; S.eleki+=reelAmt*dt*14; S.charge+=dt*30; if(Math.random()<0.3)Sound.SE.reel(); }
       else ten = -8;     // 手を止めると回復（赤からの立て直しが可能）
     }
     S.tension += dt*ten;
