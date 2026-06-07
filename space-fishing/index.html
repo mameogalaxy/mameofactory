@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>STELLAR ANGLER 〜伝説のヌシを求めて〜</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -10,21 +10,9 @@
 <div id="stage">
   <canvas id="game" width="960" height="600"></canvas>
 
-  <!-- 操作ガイド（コントローラ未接続時に表示） -->
+  <!-- 操作ガイド（PC用・タッチ環境では非表示） -->
   <div id="hint" class="hint">
-    <strong>DUALSHOCK 2 推奨</strong>（ゲームパッド接続でフル機能）<br>
-    キーボードでも遊べます： 左スティック=<b>WASD</b> / 右スティック=<b>方向キー</b> / ○=<b>Space</b> / △エレキ=<b>E</b> / ×=<b>Z</b>
-  </div>
-
-  <!-- スマホ用 仮想デュアルアナログ＋ボタン -->
-  <div id="touch" class="touch">
-    <div class="stick" id="stickL"><div class="knob"></div><span>狙う / 竿さばき</span></div>
-    <div class="stick" id="stickR"><div class="knob"></div><span>リール（回す）</span></div>
-    <div class="btns">
-      <div class="tbtn b-tri" id="btnTri">△</div>
-      <div class="tbtn b-cir" id="btnCir">○</div>
-      <div class="tbtn b-cro" id="btnCro">×</div>
-    </div>
+    キーボード： 左スティック=<b>WASD</b> / 右スティック=<b>方向キー</b> / 決定=<b>Space</b> / エレキ=<b>E</b> ／ ゲームパッド対応
   </div>
 
   <!-- 縦持ち時の回転うながし -->
@@ -38,8 +26,6 @@
     </div>
   </div>
 </div>
-
-<audio id="bgm" loop preload="auto"></audio>
 
 <script src="js/utils.js"></script>
 <script src="js/input.js"></script>

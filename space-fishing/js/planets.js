@@ -21,8 +21,13 @@ const PLANETS = [
 
 // 星空（各惑星共通の宇宙背景）
 const STARS = [];
-for(let i=0;i<160;i++){
+for(let i=0;i<180;i++){
   STARS.push({ x:Math.random(), y:Math.random()*0.72, r:Math.random()*1.6+0.3, tw:Math.random()*U.TAU });
+}
+// 星雲（ふわっとした色の雲）
+const NEBULA = [];
+for(let i=0;i<5;i++){
+  NEBULA.push({ x:Math.random(), y:Math.random()*0.5, r:120+Math.random()*160, drift:Math.random()*U.TAU });
 }
 
 function drawSkyAndSpace(ctx, W, H, planet, t){
@@ -31,6 +36,18 @@ function drawSkyAndSpace(ctx, W, H, planet, t){
   const cols=planet.sky;
   cols.forEach((c,i)=>g.addColorStop(i/(cols.length-1), c));
   ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  // 星雲
+  ctx.globalCompositeOperation='lighter';
+  for(const n of NEBULA){
+    const nx=(n.x*W + Math.sin(t*0.05+n.drift)*30);
+    const ny=n.y*H;
+    const ng=ctx.createRadialGradient(nx,ny,10,nx,ny,n.r);
+    ng.addColorStop(0, planet.haze);
+    ng.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=ng; ctx.beginPath(); ctx.arc(nx,ny,n.r,0,U.TAU); ctx.fill();
+  }
+  ctx.globalCompositeOperation='source-over';
 
   // 星
   for(const s of STARS){
