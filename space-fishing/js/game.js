@@ -29,8 +29,9 @@ const DIFF = [
 ];
 function D(){ return DIFF[G.difficulty]||DIFF[0]; }
 // 各惑星でヌシが現れるまでに釣る通常魚の数（惑星4はいきなりヌシ）
-const QUOTA = [2,2,3,3,0];
-function isNushiTime(){ return !G.nushiDone[G.planet] && G.planetProgress[G.planet] >= QUOTA[G.planet]; }
+const QUOTA = [2,2,3,3,3];
+// 規定数の通常魚を釣るとヌシが出現。討伐後も再度規定数を釣れば「ヌシ再戦」が出る（全クリ後もヌシは一応出てくる）
+function isNushiTime(){ return QUOTA[G.planet]>0 && G.planetProgress[G.planet] >= QUOTA[G.planet]; }
 
 try{
   const s=JSON.parse(localStorage.getItem('stellar_angler')||'{}');
@@ -67,6 +68,7 @@ const S = {
   fish:null, fishHP:0, fishMax:0, tension:0, progress:0,
   charge:0, eleki:0, pinch:false,
   mode:'run', modeT:0, koTimer:0, hitFx:0, elekiFx:0,
+  boss:false, bossPhase:1, bossPhaseMax:1, phaseFx:0,
   fishX:FAR_X, fishY:WL-120, jumpT:0, jumpDur:1, jumpFrom:WL, jumpTo:WL-160,
   caughtData:null, catchAnim:0, resultAnim:0, clearAnim:0, endAnim:0,
 };
@@ -333,14 +335,38 @@ function beh(d){
   return M[d.temper]||M.steady;
 }
 function startFight(s){
-  const d=s.d; S.fish=d; S.fishMax=Math.round(d.hp*D().hpMul); S.fishHP=S.fishMax; S.beh=beh(d);
+  const d=s.d;
+  // ヌシは形態変化するので個体をクローン（見た目を形態ごとに変える）
+  S.boss=!!d.boss; S.bossPhase=1; S.bossPhaseMax=d.boss?3:1; S.phaseFx=0;
+  S.fish=d.boss?{...d}:d;
+  S.fishMax=Math.round(d.hp*D().hpMul); S.fishHP=S.fishMax; S.beh=beh(d);
   S.tension=18; S.progress=0; S.charge=0; S.eleki=0; S.pinch=false;
   S.mode='run'; S.modeT=U.rand(1.0,1.8)*S.beh.rd; S.koTimer=0; S.hitFx=0; S.elekiFx=0;
   S.fishX=FAR_X; S.fishY=WL-30; setJump(true);
   const i=S.swimmers.indexOf(s); if(i>=0)S.swimmers.splice(i,1);
   G.state='FIGHT'; Sound.SE.bite(); flash(0.4);
   burst(FAR_X,WL,20,{c:'#bff',smax:5,up:3,lmax:0.7,rmax:5,g:0.05});
-  toast('ヒット！ '+d.name+'！ '+(touchMode()?'なぞって巻け！ おとなしい時がチャンス':'方向キーで巻け！'),2.6);
+  const intro = d.boss? 'ヌシ「'+d.name+'」だ！ 全形態を打ち破れ！' : 'ヒット！ '+d.name+'！ '+(touchMode()?'なぞって巻け！ おとなしい時がチャンス':'方向キーで巻け！');
+  toast(intro,2.8);
+}
+// ヌシの形態移行：体力を回復し暴れ強化、引き離して見た目も変化
+function nextBossPhase(){
+  S.bossPhase++;
+  const frac = S.bossPhase===2?0.62:0.85;     // 形態ごとの体力割合
+  S.fishHP = Math.round(S.fishMax*frac);
+  S.progress = Math.max(0, S.progress-32);     // 暴れて一気に引き離す
+  S.tension = Math.min(S.tension, 38);
+  S.charge=0; S.eleki=Math.min(S.eleki,45);
+  S.mode='run'; S.modeT=U.rand(1.1,1.7); setJump(true);
+  // 暴れを激化
+  S.beh={...S.beh, rr:S.beh.rr*1.18, rd:S.beh.rd*1.22, da:S.beh.da*1.15};
+  // 見た目を「怒り形態」に変化
+  if(S.bossPhase===2){ S.fish.size*=1.06; S.fish.spike=(S.fish.spike||1)*1.2; S.fish.glow='rgba(255,170,60,.8)'; }
+  else { S.fish.size*=1.08; S.fish.spike=(S.fish.spike||1)*1.35; S.fish.c1='#ff8a7a'; S.fish.glow='rgba(255,80,90,.9)'; }
+  S.phaseFx=1; G.shake=26; flash(0.85, S.bossPhase===2?'255,200,90':'255,90,90');
+  Sound.SE.eleki&&Sound.SE.eleki(); Sound.SE.warn&&Sound.SE.warn();
+  burst(S.fishX,S.fishY,46,{c:'#ffd34d',smax:10,up:2,lmax:1.3,rmax:10,glow:true});
+  toast(S.bossPhase===2?'第二形態！ さらに荒れ狂う！':'最終形態！ 全力で抗ってくる！',2.6);
 }
 function setJump(big){
   const B=S.beh||{jh:1};
@@ -420,8 +446,12 @@ function updateFight(dt){
   else if(strike || S.charge>=100){ if(!doEleki()) doAttack(); }
   if(S.hitFx>0)S.hitFx-=dt; if(S.elekiFx>0)S.elekiFx-=dt;
 
-  if(S.fishHP<=0 && S.koTimer===0){ S.fishHP=0; S.koTimer=0.001; Sound.SE.ko(); flash(0.5); toast('ダウン！ 巻き上げろ！',1.8); }
+  if(S.fishHP<=0 && S.koTimer===0){
+    if(S.boss && S.bossPhase<S.bossPhaseMax){ nextBossPhase(); }
+    else { S.fishHP=0; S.koTimer=0.001; Sound.SE.ko(); flash(0.5); toast('ダウン！ 巻き上げろ！',1.8); }
+  }
   if(S.koTimer>0) S.koTimer+=dt;
+  if(S.phaseFx>0) S.phaseFx-=dt;
 
   // 位置：progressで左（キャラ側）へ寄る。ジャンプで上下。暴れ中は性格に応じて左右にダート。
   const wig=(!koed&&S.mode==='run')?Math.sin(G.t*(6+B.rr*3))*22*B.da:0;
@@ -453,10 +483,19 @@ function updateCatch(dt){ S.catchAnim+=dt; if(S.catchAnim>0.8&&uiConfirm()){ G.s
 function updateResult(dt){ S.resultAnim+=dt;
   if(S.resultAnim>0.5&&uiConfirm()){
     if(S.caughtData.boss){
-      G.nushiDone[G.planet]=true; save();
-      if(S.caughtData.id==='NUSHI'){ G.state='ENDING'; S.endAnim=0; Sound.SE.fanfare(); return; }
-      if(G.unlocked<G.planet+2){ G.unlocked=Math.min(PLANETS.length,G.planet+2); save(); }
-      G.state='CLEAR'; S.clearAnim=0; Sound.SE.fanfare();
+      const firstClear=!G.nushiDone[G.planet];
+      G.nushiDone[G.planet]=true;
+      G.planetProgress[G.planet]=0;   // カウントをリセット→また規定数釣ればヌシ再戦
+      save();
+      if(firstClear){
+        if(S.caughtData.id==='NUSHI'){ G.state='ENDING'; S.endAnim=0; Sound.SE.fanfare(); return; }
+        if(G.unlocked<G.planet+2){ G.unlocked=Math.min(PLANETS.length,G.planet+2); save(); }
+        G.state='CLEAR'; S.clearAnim=0; Sound.SE.fanfare();
+      }else{
+        // 再戦勝利：そのまま釣りを続行
+        G.state='CAST'; resetCast(); resetSwimmers();
+        toast('✦ '+S.caughtData.name+' をまた仕留めた！',3.0);
+      }
     }else{
       // 通常魚：続けて釣る（規定数に達していれば次の投擲でヌシ出現）
       G.state='CAST'; resetCast(); resetSwimmers();
@@ -673,9 +712,10 @@ function drawTop(planet){
   ctx.fillStyle=planet.accent; ctx.font='bold 18px sans-serif'; ctx.textAlign='left'; ctx.fillText('🪐 '+planet.name,14,26);
   ctx.fillStyle='#fff'; ctx.textAlign='right'; ctx.font='bold 15px sans-serif';
   let lab;
-  if(G.nushiDone[G.planet]) lab='★ ヌシ討伐ずみ';
-  else if(isNushiTime()) lab='✦ ヌシ出現中 ✦';
-  else lab=`ヌシまで あと ${Math.max(0,QUOTA[G.planet]-G.planetProgress[G.planet])}匹`;
+  const rest=Math.max(0,QUOTA[G.planet]-G.planetProgress[G.planet]);
+  if(isNushiTime()) lab='✦ ヌシ出現中 ✦';
+  else if(G.nushiDone[G.planet]) lab=`★討伐ずみ（再戦まで あと ${rest}匹）`;
+  else lab=`ヌシまで あと ${rest}匹`;
   ctx.fillText(lab,W-14,25); ctx.textAlign='left';
 }
 function bar(x,y,w,h,v,col,label){ roundRect(ctx,x,y,w,h,h/2); ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fill();
@@ -700,7 +740,9 @@ function fightHUD(){
   ctx.textAlign='center';
   ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif';
   ctx.shadowColor='#000'; ctx.shadowBlur=6; ctx.fillText(S.fish.name, W/2, 64); ctx.shadowBlur=0;
-  ctx.fillStyle=D().col; ctx.font='bold 12px sans-serif'; ctx.fillText('[ '+D().name+' ]', W/2, 44);
+  let badge='[ '+D().name+' ]';
+  if(S.boss) badge+='  ✦ 第'+['','一','二','三'][S.bossPhase]+'形態 / 全'+S.bossPhaseMax+'形態';
+  ctx.fillStyle=S.boss&&S.bossPhase===S.bossPhaseMax?'#ff4d6b':D().col; ctx.font='bold 12px sans-serif'; ctx.fillText(badge, W/2, 44);
   ctx.textAlign='left';
   // テンション（横・危険ゾーン付き）
   const tx=W/2-170,ty=82,tw=340,th=14;
@@ -848,9 +890,10 @@ function renderSelect(){
   if(locked){ ctx.fillStyle='#fff'; ctx.font='bold 40px sans-serif'; ctx.fillText('🔒',cx,cy+14); }
   ctx.fillStyle=planet.accent; ctx.font='bold 30px sans-serif'; ctx.fillText(planet.name,cx,cy+r+50);
   ctx.fillStyle='#aab'; ctx.font='15px sans-serif'; ctx.fillText(planet.sub+'  難易度 '+planet.diff,cx,cy+r+74);
-  if(!locked){ ctx.fillStyle='#9fd'; ctx.font='14px sans-serif';
-    const sc=G.selCursor;
-    ctx.fillText(G.nushiDone[sc]?'★ ヌシ討伐ずみ':`ヌシまで ${Math.min(G.planetProgress[sc],QUOTA[sc])} / ${QUOTA[sc]}`,cx,cy+r+98); }
+  if(!locked){ const sc=G.selCursor; ctx.font='14px sans-serif';
+    ctx.fillStyle=G.nushiDone[sc]?'#ffd34d':'#9fd';
+    const cnt=`ヌシまで ${Math.min(G.planetProgress[sc],QUOTA[sc])} / ${QUOTA[sc]}`;
+    ctx.fillText(G.nushiDone[sc]?('★討伐ずみ・再戦 '+cnt):cnt,cx,cy+r+98); }
   ctx.fillStyle='rgba(255,255,255,.5)'; ctx.font='bold 40px sans-serif'; ctx.fillText('‹',cx-r-50,cy+14); ctx.fillText('›',cx+r+50,cy+14);
   for(let i=0;i<PLANETS.length;i++){ const dx=cx-(PLANETS.length-1)*14+i*28; ctx.beginPath(); ctx.arc(dx,H-46,7,0,U.TAU);
     ctx.fillStyle=i===G.selCursor?'#fff':(i<G.unlocked?'#6ad':'#444'); ctx.fill(); }

@@ -107,6 +107,12 @@ const FISH_DB = [
   {id:'thunjaw', temper:'heavy', name:'サンダージョー', planet:3, tier:4, hp:360, power:2.6, speed:1.7, size:1.45,
    c1:'#b6f', c2:'#516', fin:'#ddf', glow:'rgba(180,120,255,.6)', tail:1.2, spike:1.3, pattern:'spot', fat:1.25},
 
+  // --- 惑星4: 銀河の最果て（通常魚も強い） ---
+  {id:'starwhal', temper:'heavy', name:'スターホエール', planet:4, tier:4, hp:420, power:2.4, speed:1.3, size:1.5,
+   c1:'#9be8ff', c2:'#274a9a', fin:'#ffd34d', glow:'rgba(150,210,255,.6)', tail:1.2, spike:0.9, pattern:'spot', fat:1.4},
+  {id:'voidray', temper:'wild', name:'ヴォイドレイ', planet:4, tier:4, hp:500, power:2.8, speed:1.6, size:1.6,
+   c1:'#c8a0ff', c2:'#2a1060', fin:'#ffd34d', glow:'rgba(200,150,255,.65)', tail:1.3, spike:1.2, pattern:'stripe', fat:1.3},
+
   // --- 伝説のヌシ（最終ボス：惑星4 銀河の最果て） ---
   {id:'NUSHI', temper:'wild', name:'伝説のヌシ・レヴィアコス', planet:4, tier:5, boss:true,
    hp:900, power:3.2, speed:1.4, size:2.2,
