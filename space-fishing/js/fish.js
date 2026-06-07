@@ -84,45 +84,45 @@ function drawSpaceFish(ctx, x, y, s, dir, t, data, opt={}){
 /* 種族カタログ。planet:対応惑星index。tier=レア度 */
 const FISH_DB = [
   // --- 惑星0: ネオン水星（入門） ---
-  {id:'guppstar', name:'グッピスター', planet:0, tier:1, hp:60, power:0.7, speed:1.0, size:0.7,
+  {id:'guppstar', temper:'darty', name:'グッピスター', planet:0, tier:1, hp:60, power:0.7, speed:1.0, size:0.7,
    c1:'#7fe3ff', c2:'#2b8fd6', fin:'#bff', glow:'rgba(120,220,255,.4)', tail:0.5, spike:0.3, pattern:'spot', fat:0.9},
-  {id:'cometcod', name:'コメットコッド', planet:0, tier:1, hp:90, power:1.0, speed:1.2, size:0.9,
+  {id:'cometcod', temper:'steady', name:'コメットコッド', planet:0, tier:1, hp:90, power:1.0, speed:1.2, size:0.9,
    c1:'#aef', c2:'#3a7', fin:'#cf9', glow:'rgba(150,255,180,.4)', tail:0.6, spike:0.5, pattern:'stripe', fat:1.0},
 
   // --- 惑星1: 溶岩のヴァルカン ---
-  {id:'magmaray', name:'マグマレイ', planet:1, tier:2, hp:140, power:1.4, speed:1.1, size:1.0,
+  {id:'magmaray', temper:'aggro', name:'マグマレイ', planet:1, tier:2, hp:140, power:1.4, speed:1.1, size:1.0,
    c1:'#ffb24d', c2:'#d63a1a', fin:'#ffd', glow:'rgba(255,140,40,.5)', tail:0.8, spike:0.7, pattern:'stripe', fat:1.1},
-  {id:'pyrobass', name:'パイロバス', planet:1, tier:2, hp:180, power:1.7, speed:1.3, size:1.1,
+  {id:'pyrobass', temper:'aggro', name:'パイロバス', planet:1, tier:2, hp:180, power:1.7, speed:1.3, size:1.1,
    c1:'#ff7a3d', c2:'#a01010', fin:'#fc6', glow:'rgba(255,90,30,.5)', tail:0.7, spike:0.9, pattern:'spot', fat:1.2},
 
   // --- 惑星2: 氷結のグラシエ ---
-  {id:'frostpike', name:'フロストパイク', planet:2, tier:2, hp:160, power:1.5, speed:1.5, size:1.05,
+  {id:'frostpike', temper:'jumper', name:'フロストパイク', planet:2, tier:2, hp:160, power:1.5, speed:1.5, size:1.05,
    c1:'#dffaff', c2:'#5aa6e0', fin:'#fff', glow:'rgba(180,235,255,.5)', tail:0.9, spike:1.0, pattern:'stripe', fat:0.85},
-  {id:'aurorel', name:'オーロレル', planet:2, tier:3, hp:230, power:1.9, speed:1.4, size:1.2,
+  {id:'aurorel', temper:'steady', name:'オーロレル', planet:2, tier:3, hp:230, power:1.9, speed:1.4, size:1.2,
    c1:'#c8ffe6', c2:'#7a5cff', fin:'#dff', glow:'rgba(150,255,220,.55)', tail:1.0, spike:0.8, pattern:'spot', fat:1.0},
 
   // --- 惑星3: 雷雲のテンペスト ---
-  {id:'volttuna', name:'ヴォルトツナ', planet:3, tier:3, hp:280, power:2.2, speed:1.6, size:1.3,
+  {id:'volttuna', temper:'aggro', name:'ヴォルトツナ', planet:3, tier:3, hp:280, power:2.2, speed:1.6, size:1.3,
    c1:'#fff27a', c2:'#caa11a', fin:'#ffd', glow:'rgba(255,240,120,.6)', tail:1.0, spike:1.1, pattern:'stripe', fat:1.1},
-  {id:'thunjaw', name:'サンダージョー', planet:3, tier:4, hp:360, power:2.6, speed:1.7, size:1.45,
+  {id:'thunjaw', temper:'heavy', name:'サンダージョー', planet:3, tier:4, hp:360, power:2.6, speed:1.7, size:1.45,
    c1:'#b6f', c2:'#516', fin:'#ddf', glow:'rgba(180,120,255,.6)', tail:1.2, spike:1.3, pattern:'spot', fat:1.25},
 
   // --- 伝説のヌシ（最終ボス：惑星4 銀河の最果て） ---
-  {id:'NUSHI', name:'伝説のヌシ・レヴィアコス', planet:4, tier:5, boss:true,
+  {id:'NUSHI', temper:'wild', name:'伝説のヌシ・レヴィアコス', planet:4, tier:5, boss:true,
    hp:900, power:3.2, speed:1.4, size:2.2,
    c1:'#9be8ff', c2:'#1b2b8a', fin:'#ffd34d', glow:'rgba(255,215,80,.7)', tail:1.4, spike:1.5, pattern:'stripe', fat:1.4},
 
   // --- 各惑星のヌシ（その星のボス） ---
-  {id:'nushi0', name:'ネオンの主・アクアレックス', planet:0, tier:3, boss:true,
+  {id:'nushi0', temper:'steady', name:'ネオンの主・アクアレックス', planet:0, tier:3, boss:true,
    hp:300, power:1.4, speed:1.2, size:1.6,
    c1:'#7fe3ff', c2:'#1560a6', fin:'#ffd34d', glow:'rgba(120,220,255,.6)', tail:1.0, spike:0.8, pattern:'spot', fat:1.3},
-  {id:'nushi1', name:'溶岩の主・イグニフレア', planet:1, tier:4, boss:true,
+  {id:'nushi1', temper:'heavy', name:'溶岩の主・イグニフレア', planet:1, tier:4, boss:true,
    hp:460, power:1.9, speed:1.3, size:1.75,
    c1:'#ffb24d', c2:'#8a1505', fin:'#ffd34d', glow:'rgba(255,120,40,.65)', tail:1.1, spike:1.1, pattern:'stripe', fat:1.35},
-  {id:'nushi2', name:'氷結の主・グレイシオン', planet:2, tier:4, boss:true,
+  {id:'nushi2', temper:'jumper', name:'氷結の主・グレイシオン', planet:2, tier:4, boss:true,
    hp:600, power:2.2, speed:1.5, size:1.85,
    c1:'#dffaff', c2:'#2a6ec0', fin:'#ffd34d', glow:'rgba(180,235,255,.65)', tail:1.2, spike:1.2, pattern:'spot', fat:1.2},
-  {id:'nushi3', name:'雷雲の主・ライジンガ', planet:3, tier:5, boss:true,
+  {id:'nushi3', temper:'aggro', name:'雷雲の主・ライジンガ', planet:3, tier:5, boss:true,
    hp:760, power:2.6, speed:1.6, size:1.95,
    c1:'#fff27a', c2:'#3a1a6e', fin:'#ffd34d', glow:'rgba(255,240,120,.7)', tail:1.3, spike:1.4, pattern:'stripe', fat:1.3},
 ];

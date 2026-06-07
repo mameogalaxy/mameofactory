@@ -88,6 +88,10 @@ function update(dt){
   if(G.fade>0 && G.state!=='LOADING') G.fade=Math.max(0,G.fade-dt*1.6);
   if(G.msgT>0){ G.msgT-=dt; if(G.msgT<=0) G.msg=null; }
   updateP(dt);
+  // プレイ中の「タイトルへ戻る」ボタン
+  if(FISHING.includes(G.state) && IN.touch.active && IN.touch.tap && inRect(IN.touch.tapX,IN.touch.tapY,backBtnRect())){
+    Sound.SE.back(); save(); G.state='TITLE'; G.fade=1; titleSel=0; return;
+  }
   switch(G.state){
     case 'TITLE': updateTitle(dt); break;
     case 'SELECT': updateSelect(dt); break;
@@ -185,6 +189,8 @@ function updateFly(dt){
 
 // ---------------- WAIT（つんつん→アタリ）----------------
 function updateWait(dt){
+  // 竿を入れ直してウキの位置を変える（投げ直し）
+  if(IN.p.cross || (IN.touch.active && IN.touch.tap)){ Sound.SE.cast(); G.state='CAST'; S.power=0; toast('竿を上げた。もう一度ねらおう',1.4); return; }
   S.waitT+=dt; S.floatBob+=dt;
   updateSwimmers(dt,true);
   let best=null,bd=999;
@@ -244,10 +250,22 @@ function drawEscape(){
 }
 
 // ---------------- FIGHT ----------------
+// 性格(temper)→暴れ方パラメータ: rr=run頻度 rd=run長さ jh=跳躍高 da=横ダート w=重さ
+function beh(d){
+  const M={
+    darty :{rr:1.35,rd:0.65,jh:0.85,da:1.6,w:0.7},
+    steady:{rr:1.0, rd:1.0, jh:1.0, da:0.8,w:1.0},
+    aggro :{rr:1.3, rd:1.2, jh:1.15,da:1.1,w:1.1},
+    jumper:{rr:1.1, rd:0.85,jh:1.7, da:0.9,w:0.9},
+    heavy :{rr:0.75,rd:1.45,jh:1.25,da:0.5,w:1.55},
+    wild  :{rr:1.25,rd:1.3, jh:1.7, da:1.5,w:1.5},
+  };
+  return M[d.temper]||M.steady;
+}
 function startFight(s){
-  const d=s.d; S.fish=d; S.fishMax=d.hp; S.fishHP=d.hp;
+  const d=s.d; S.fish=d; S.fishMax=d.hp; S.fishHP=d.hp; S.beh=beh(d);
   S.tension=18; S.progress=0; S.charge=0; S.eleki=0; S.pinch=false;
-  S.mode='run'; S.modeT=U.rand(1.0,1.8); S.koTimer=0; S.hitFx=0; S.elekiFx=0;
+  S.mode='run'; S.modeT=U.rand(1.0,1.8)*S.beh.rd; S.koTimer=0; S.hitFx=0; S.elekiFx=0;
   S.fishX=FAR_X; S.fishY=WL-30; setJump(true);
   const i=S.swimmers.indexOf(s); if(i>=0)S.swimmers.splice(i,1);
   G.state='FIGHT'; Sound.SE.bite(); flash(0.4);
@@ -255,8 +273,9 @@ function startFight(s){
   toast('ヒット！ '+d.name+'！ '+(touchMode()?'なぞって巻け！ おとなしい時がチャンス':'方向キーで巻け！'),2.6);
 }
 function setJump(big){
+  const B=S.beh||{jh:1};
   S.jumpT=0; S.jumpDur=big?U.rand(0.7,1.1):U.rand(0.5,0.8);
-  S.jumpFrom=S.fishY; S.jumpTo=big? WL-U.rand(150,240) : WL-U.rand(20,70);
+  S.jumpFrom=S.fishY; S.jumpTo=big? WL-U.rand(150,240)*B.jh : WL-U.rand(20,70);
 }
 function doAttack(){
   if(S.charge<100||S.fishHP<=0) return false;
@@ -274,11 +293,12 @@ function doEleki(){
 }
 function updateFight(dt){
   const koed=S.fishHP<=0;
-  // 暴れサイクル
+  const B=S.beh||beh(S.fish);
+  // 暴れサイクル（性格で頻度・長さが変化）
   S.modeT-=dt;
   if(!koed && S.modeT<=0){
-    if(S.mode==='run'){ S.mode='tire'; S.modeT=U.rand(0.9,1.6)*(1+(1-S.fishHP/S.fishMax)); setJump(false); }
-    else{ S.mode='run'; S.modeT=U.rand(0.8,1.5)*(S.fishHP/S.fishMax+0.4); setJump(true); Sound.SE.warn(); }
+    if(S.mode==='run'){ S.mode='tire'; S.modeT=U.rand(0.9,1.6)*(1+(1-S.fishHP/S.fishMax))/B.rr; setJump(false); }
+    else{ S.mode='run'; S.modeT=U.rand(0.8,1.5)*B.rd*(S.fishHP/S.fishMax+0.4); setJump(true); Sound.SE.warn(); }
   }
   // 入力 → reel / strike
   let reelAmt=0, strike=false;
@@ -290,13 +310,13 @@ function updateFight(dt){
 
   if(!koed){
     if(S.mode==='run'){
-      // 暴れ中：巻くとテンション急上昇＆逆に引き出される（寄らない）
-      S.tension += dt*(10 + reelAmt*44)*(0.5 + S.fish.power*0.5);
+      // 暴れ中：巻くとテンション急上昇＆逆に引き出される（寄らない）。重い魚ほど引きが強い
+      S.tension += dt*(10 + reelAmt*44)*(0.5 + S.fish.power*0.5)*(0.85+0.3*B.w);
       if(reeling){ S.progress = Math.max(0, S.progress - reelAmt*dt*3); if(Math.random()<0.2) Sound.SE.warn(); }
     }else{
-      // おとなしい時：安全に巻ける唯一のチャンス
+      // おとなしい時：安全に巻ける唯一のチャンス。重い魚ほど寄せにくい
       S.tension += dt*(reelAmt*4 - 7);
-      S.progress += reelAmt*dt*16;
+      S.progress += reelAmt*dt*16/B.w;
       if(reeling && Math.random()<0.3) Sound.SE.reel();
     }
     S.charge += dt*(reeling?22:13);               // アクションゲージ
@@ -319,8 +339,9 @@ function updateFight(dt){
   if(S.fishHP<=0 && S.koTimer===0){ S.fishHP=0; S.koTimer=0.001; Sound.SE.ko(); flash(0.5); toast('ダウン！ 巻き上げろ！',1.8); }
   if(S.koTimer>0) S.koTimer+=dt;
 
-  // 位置：progressで左（キャラ側）へ寄る。ジャンプで上下。
-  S.fishX=U.lerp(FAR_X,NEAR_X,S.progress/100);
+  // 位置：progressで左（キャラ側）へ寄る。ジャンプで上下。暴れ中は性格に応じて左右にダート。
+  const wig=(!koed&&S.mode==='run')?Math.sin(G.t*(6+B.rr*3))*22*B.da:0;
+  S.fishX=U.lerp(FAR_X,NEAR_X,S.progress/100)+wig;
   S.jumpT+=dt; const jk=U.clamp(S.jumpT/S.jumpDur,0,1);
   const arc=Math.sin(jk*Math.PI);
   const prevY=S.fishY;
@@ -364,6 +385,14 @@ function updateEnding(dt){ S.endAnim+=dt; if(S.endAnim>3&&uiConfirm()){ Sound.SE
 // ===================================================================
 //  描画
 // ===================================================================
+const FISHING=['CAST','FLY','WAIT','HOOK','FIGHT','ESCAPE'];
+function inRect(px,py,r){ return px>=r.x&&px<=r.x+r.w&&py>=r.y&&py<=r.y+r.h; }
+function backBtnRect(){ return {x:10,y:46,w:104,h:32}; }
+function drawBackButton(){
+  const r=backBtnRect(); roundRect(ctx,r.x,r.y,r.w,r.h,8); ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=1.5; roundRect(ctx,r.x,r.y,r.w,r.h,8); ctx.stroke();
+  ctx.fillStyle='#cfe'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center'; ctx.fillText('≡ タイトル',r.x+r.w/2,r.y+21); ctx.textAlign='left';
+}
 function handPos(){ return {x:AX+38, y:WL-86}; }
 function rodTip(){ const bend=(G.state==='FIGHT')?S.tension/100*18:0; return {x:AX+150, y:WL-176+bend}; }
 
@@ -401,6 +430,7 @@ function render(){
 
   // HUD
   drawTop(planet);
+  if(FISHING.includes(G.state)) drawBackButton();
   if(G.state==='CAST') hint('押してる間ねらって、指を離すと投げる','←→:ねらう ○:なげる');
   if(G.state==='WAIT') waitHint();
   if(G.state==='HOOK') hookHint();
@@ -556,8 +586,8 @@ function bigPrompt(text,col){ const s=1+Math.sin(G.t*10)*0.06; ctx.save(); ctx.t
   ctx.fillStyle=col; ctx.textAlign='center'; ctx.fillText(text,0,2); ctx.restore(); ctx.textAlign='left'; }
 
 function waitHint(){ ctx.fillStyle='#cde'; ctx.font='bold 18px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('アタリを待て…',W/2,64); ctx.textAlign='left';
-  hint('ウキがしずんだら合図','ウキがしずんだら合図'); }
+  ctx.fillText('アタリを待て…',W/2,110); ctx.textAlign='left';
+  hint('ウキがしずんだら合図／タップで投げ直し','ウキがしずんだら合図／×で投げ直し'); }
 function hookHint(){ bigPrompt(touchMode()?'いま！タップで合わせろ！':'いま！ ○ で合わせろ！','#ffea00'); }
 
 function fightHUD(){

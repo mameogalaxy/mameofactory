@@ -70,7 +70,10 @@ body.touch-on .hint{display:none}
   position:absolute;left:50%;top:8px;transform:translateX(-50%);
   background:rgba(0,0,0,.6);color:#ffe98a;
   padding:6px 14px;border-radius:18px;font-size:13px;z-index:7;
+  pointer-events:none;            /* タップを邪魔しない */
 }
+@keyframes rotateFade{ 0%,72%{opacity:1} 100%{opacity:0;visibility:hidden} }
 @media (orientation:portrait){
-  body.touch-on .rotate{display:block}
+  /* 縦向きで数秒だけ表示して自動的に消える */
+  body.touch-on .rotate{ display:block; animation:rotateFade 5.5s ease forwards; }
 }
