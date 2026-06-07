@@ -13,6 +13,7 @@ const WL = 372;        // 水面の高さ
 const AX = 150;        // アングラーの立ち位置X
 const FAR_X = 860;     // 魚が暴れる遠い位置
 const NEAR_X = 300;    // 寄せきった位置
+const PINCH  = 82;     // この値以上でピンチ（救済エレキがたまる）
 
 const G = {
   state:'LOADING', t:0, planet:0, selCursor:0, unlocked:1,
@@ -336,10 +337,11 @@ function setJump(big){
 }
 function doAttack(){
   if(S.charge<100||S.fishHP<=0) return false;
-  const dmg=S.fishMax*0.16+28; S.fishHP-=dmg; S.charge=0; S.tension=Math.max(0,S.tension-24);
+  const dmg=S.fishMax*0.16+28; S.fishHP-=dmg; S.charge=0;
+  const escaped=S.tension>=PINCH; S.tension=escaped?38:Math.max(0,S.tension-24);
   S.eleki=U.clamp(S.eleki+56,0,100);   // こうげき成功でエレキが大きくたまる
   S.mode='tire'; S.modeT=Math.max(S.modeT,1.0); S.hitFx=0.4; G.shake=8; Sound.SE.attack();
-  burst(S.fishX,S.fishY,16,{c:'#ffd34d',smax:6,lmax:0.8,rmax:6,glow:true}); toast('こうげき！');
+  burst(S.fishX,S.fishY,16,{c:'#ffd34d',smax:6,lmax:0.8,rmax:6,glow:true}); toast(escaped?'こうげきでピンチ脱出！':'こうげき！');
   return true;
 }
 function doEleki(){
@@ -360,7 +362,7 @@ function updateFight(dt){
   }
   // 入力 → reel / strike
   let reelAmt=0, strike=false;
-  if(IN.touch.active){ if(IN.touch.down) reelAmt=U.clamp(IN.touch.speed*0.18,0,2.4); if(IN.touch.tap) strike=true; }
+  if(IN.touch.active){ if(IN.touch.down) reelAmt=U.clamp(0.7+IN.touch.speed*0.26,0,2.8); if(IN.touch.tap) strike=true; }
   else{ const keyReel=(IN.RY<-0.3||IN.RX!==0||IN.circle&&false)?1:0; const spin=Input.reelSpin(IN.RX,IN.RY);
     reelAmt=(spin>0.6)?Math.min(2.2,spin):(keyReel?1.5:0);
     if(IN.p.square&&doAttack()){} if(IN.p.triangle&&doEleki()){} if(IN.p.circle){ if(!doEleki())doAttack(); } }
@@ -370,23 +372,27 @@ function updateFight(dt){
     let ten;
     if(S.mode==='run'){
       // 暴れ中：常にじわじわ上がる。巻くと急上昇＆逆に出される（手を止めて耐える）
-      ten = 4.4*(0.7+S.fish.power*0.25)*(0.9+0.2*B.w);
-      if(reeling){ ten += reelAmt*20; S.progress=Math.max(0,S.progress-reelAmt*dt*3); if(Math.random()<0.2)Sound.SE.warn(); }
+      ten = 3.4*(0.7+S.fish.power*0.25)*(0.9+0.2*B.w);
+      if(reeling){ ten += reelAmt*14; S.progress=Math.max(0,S.progress-reelAmt*dt*3); if(Math.random()<0.2)Sound.SE.warn(); }
     }else{
       // おとなしい時：テンションは上がらない（暴れてる時だけ上がる）。巻けば寄る／止めれば回復
       if(reeling){ ten = -2; S.progress+=reelAmt*dt*16/B.w; S.eleki+=reelAmt*dt*14; S.charge+=dt*30; if(Math.random()<0.3)Sound.SE.reel(); }
       else ten = -8;     // 手を止めると回復（赤からの立て直しが可能）
     }
+    // ピンチ中はテンション上昇がゆるやかになり、立て直す猶予ができる
+    if(S.tension>=PINCH && ten>0) ten*=0.4;
     S.tension += dt*ten;
   }else{
     S.tension=U.lerp(S.tension,8,dt*2); S.progress += reelAmt*dt*30;  // KO後も巻かないと寄らない
   }
   S.tension=U.clamp(S.tension,0,100);
-  S.charge=U.clamp(S.charge,0,100); S.progress=U.clamp(S.progress,0,100); S.eleki=U.clamp(S.eleki,0,100);
 
-  const wasPinch=S.pinch; S.pinch=S.tension>=80&&!koed;
-  // エレキは「成功（うまく寄せる・こうげき命中）」でたまるご褒美ゲージ
-  if(S.pinch&&!wasPinch) Sound.SE.warn();
+  const wasPinch=S.pinch; S.pinch=S.tension>=PINCH&&!koed;
+  // ピンチ中は「救済エレキ」が自動でぐんぐんたまる → こうげき/エレキ成功でピンチ脱出
+  if(S.pinch){ S.eleki+=dt*42; S.charge+=dt*30; }
+  if(S.pinch&&!wasPinch){ Sound.SE.warn(); toast('ピンチ！ エレキをためて反撃で脱出！',1.8); }
+
+  S.charge=U.clamp(S.charge,0,100); S.progress=U.clamp(S.progress,0,100); S.eleki=U.clamp(S.eleki,0,100);
 
   if(S.tension>=100){ Sound.SE.snap(); G.shake=14; flash(0.5,'255,80,80');
     startEscape(S.fish, S.fishX, S.fishY, 'ラインが切れた！'); return; }
