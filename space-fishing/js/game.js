@@ -52,6 +52,7 @@ const Scene = {
   fish:null, fishHP:0, fishMax:0, tension:0, progress:0,
   rodPower:0, eleki:0, pinch:false,
   fishMode:'run', modeT:0, pullX:0, koTimer:0, hitFx:0, elekiFx:0, lateral:0,
+  fx:0, fy:-1, entry:0, dart:0, dartT:0,   // 空中で暴れる魚の位置/出現
   caughtData:null, catchAnim:0, resultAnim:0, clearAnim:0, endAnim:0,
 };
 function resetSceneForPlanet(){
@@ -208,6 +209,7 @@ function startFight(s){
   Scene.tension=20; Scene.progress=0; Scene.rodPower=0; Scene.eleki=0; Scene.pinch=false;
   Scene.fishMode='run'; Scene.modeT=U.rand(1.2,2.2); Scene.pullX=U.pick([-1,1]);
   Scene.koTimer=0; Scene.hitFx=0; Scene.elekiFx=0; Scene.lateral=0;
+  Scene.fx=0; Scene.fy=-1.0; Scene.entry=0; Scene.dart=0; Scene.dartT=0;
   const i=Scene.swimmers.indexOf(s); if(i>=0)Scene.swimmers.splice(i,1);
   G.state='FIGHT'; Sound.SE.bite();
   toast('ヒット！ '+d.name+'！ '+(touchMode()?'画面をなぞって巻け！':'右スティックで巻け！'),2.4);
@@ -236,6 +238,30 @@ function updateFight(dt){
     else{ F.fishMode='run'; F.modeT=U.rand(0.9,1.8)*(F.fishHP/F.fishMax+0.4); F.pullX=U.pick([-1,1]); Sound.SE.warn(); }
   }
   F.lateral=U.lerp(F.lateral, koed?0:(F.fishMode==='run'?F.pullX:0), dt*3);
+
+  // --- 海から現れて空中で暴れる（宇宙の無重力で魚が飛ぶ）---
+  const prog=F.progress/100;
+  const eleReady=F.eleki>=100;
+  F.entry=Math.min(1,F.entry+dt*1.6);
+  const intensity = koed?0.15 : (F.fishMode==='run' ? (eleReady?1.4:1.0) : 0.35);
+  F.dartT-=dt;
+  if(F.dartT<=0 && !koed && F.fishMode==='run'){ F.dart=U.rand(-3.2,3.2)*intensity; F.dartT=U.rand(0.25,0.6); }
+  F.dart=U.lerp(F.dart,0,dt*2.2);
+  let tgtX = F.lateral*3.2*(1-prog*0.4) + F.dart + Math.sin(G.t*7)*0.4*intensity;
+  let tgtY;
+  if(koed) tgtY = 0.25 + Math.sin(G.t*2)*0.05;                                   // 力尽きて浮く
+  else if(F.fishMode==='run') tgtY = (1.0 + Math.abs(Math.sin(G.t*5+F.pullX))*1.8*intensity)*(1-prog*0.35); // 空中で跳ね暴れる
+  else tgtY = -0.05 + Math.sin(G.t*3)*0.15;                                      // 水面付近でうねる
+  const aimY = F.entry<1 ? U.lerp(-1.0, tgtY, U.ease(F.entry)) : tgtY;
+  const prevY=F.fy;
+  F.fx=U.lerp(F.fx, tgtX, dt*(intensity*6+3));
+  F.fy=U.lerp(F.fy, aimY, dt*(intensity*5+4));
+  // 水面を抜ける／落ちる瞬間にしぶき
+  if((prevY<0)!==(F.fy<0)){
+    const sp=project(F.fx,0,U.lerp(11,2.5,prog),cam,W,H);
+    Sound.SE.splash();
+    burst(sp.x,sp.y,14,{c:'#bff',smax:5,up:F.fy>=0?2.2:0.8,lmax:0.6,rmax:4,g:0.06});
+  }
 
   // --- 入力を reelAmt / leanX / strike に正規化 ---
   let reelAmt=0, leanX=0, strike=false;
@@ -294,11 +320,9 @@ function updateFight(dt){
   if(F.progress>=100) landFish();
 }
 function fishScreen(){
-  const F=Scene, koed=F.fishHP<=0, prog=F.progress/100;
-  const z=U.lerp(11,2.5,prog), lat=F.lateral*3*(1-prog*0.6);
-  const splash=F.fishMode==='run'&&!koed;
-  const yW=koed?0.3:(splash?0.1+Math.abs(Math.sin(G.t*9))*0.4:-0.2);
-  return project(lat,yW,z,cam,W,H);
+  const F=Scene, prog=F.progress/100;
+  const z=U.lerp(11,2.5,prog);
+  return project(F.fx, F.fy, z, cam, W,H);
 }
 function landFish(){
   const d=Scene.fish; const base=30+d.size*60; const cm=Math.round(base*U.rand(0.7,1.5));
@@ -486,19 +510,34 @@ function drawSwimmers(){
 // ---- FIGHT ----
 function renderFight(){
   const F=Scene, koed=F.fishHP<=0, p=fishScreen();
-  const dir=F.lateral>=0?-1:1;
+  const dir=F.fx>=0?-1:1;
+  const wild=(!koed&&F.fishMode==='run')?1:0.25;
+  const tilt=U.clamp(F.dart*0.1,-0.6,0.6)+Math.sin(G.t*6)*0.1*wild;
+  const sc=p.s*1.1*F.fish.size;
+
+  // エレキ放電（発動時）
   if(F.elekiFx>0){ ctx.strokeStyle=`rgba(180,230,255,${F.elekiFx})`; ctx.lineWidth=3; ctx.shadowColor='#9cf'; ctx.shadowBlur=12;
     for(let i=0;i<6;i++){ ctx.beginPath(); let lx=p.x,ly=p.y-60; ctx.moveTo(lx,ly);
       for(let j=0;j<6;j++){ lx+=U.rand(-20,20); ly+=14; ctx.lineTo(lx,ly); } ctx.stroke(); } ctx.shadowBlur=0; }
-  ctx.save(); if(F.hitFx>0) ctx.translate(U.rand(-6,6),U.rand(-6,6));
-  drawSpaceFish(ctx,p.x,p.y,p.s*1.1*F.fish.size,dir,G.t*1.5,F.fish,{glow:true});
+  // エレキ満タン：魚にまとわりつくスパーク（チャージ完了の合図）
+  if(F.eleki>=100&&!koed){ ctx.strokeStyle=`rgba(150,210,255,${0.5+0.4*Math.sin(G.t*20)})`; ctx.lineWidth=2; ctx.shadowColor='#9cf'; ctx.shadowBlur=10;
+    for(let i=0;i<4;i++){ const a=G.t*3+i*1.6; ctx.beginPath();
+      let lx=p.x+Math.cos(a)*sc*18, ly=p.y+Math.sin(a)*sc*12;
+      for(let j=0;j<4;j++){ lx+=U.rand(-12,12); ly+=U.rand(-12,12); j===0?ctx.moveTo(lx,ly):ctx.lineTo(lx,ly); } ctx.stroke(); }
+    ctx.shadowBlur=0; }
+
+  ctx.save();
+  ctx.translate(p.x,p.y);
+  if(F.hitFx>0) ctx.translate(U.rand(-6,6),U.rand(-6,6));
+  ctx.rotate(tilt);
+  drawSpaceFish(ctx,0,0,sc,dir,G.t*1.5,F.fish,{glow:true});
   const fl=Math.max(F.hitFx,F.elekiFx);
   if(fl>0){ ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=fl;
-    drawSpaceFish(ctx,p.x,p.y,p.s*1.1*F.fish.size,dir,G.t*1.5,{...F.fish,c1:'#fff',c2:'#fff',fin:'#fff'},{glow:false});
+    drawSpaceFish(ctx,0,0,sc,dir,G.t*1.5,{...F.fish,c1:'#fff',c2:'#fff',fin:'#fff'},{glow:false});
     ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over'; }
-  if(koed){ ctx.fillStyle='#fff'; ctx.font='bold 22px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('×  ×',p.x,p.y-p.s*30); ctx.textAlign='left'; }
   ctx.restore();
+  if(koed){ ctx.fillStyle='#fff'; ctx.font='bold 22px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('×  ×',p.x,p.y-sc*30); ctx.textAlign='left'; }
 }
 
 // ===================================================================

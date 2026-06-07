@@ -20,6 +20,7 @@ html,body{
   transform:translate(-50%,-50%);
   aspect-ratio:960/600;
   width:min(100vw, calc(100vh * 960 / 600));
+  width:min(100vw, calc(100dvh * 960 / 600)); /* ブラウザのツールバーを除いた可視領域に収める */
   height:auto;
 }
 canvas{
