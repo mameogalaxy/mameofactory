@@ -154,29 +154,35 @@ function moveSel(d){ if(selCD>0) return; selCD=0.16; G.selCursor=U.clamp(G.selCu
 function enterPlanet(){
   if(G.selCursor>=G.unlocked){ Sound.SE.back(); toast('この惑星はまだロックされている…'); return; }
   Sound.SE.select(); G.planet=G.selCursor; resetSwimmers();
-  S.aimX=540; S.power=0; G.state='CAST'; G.fade=1;
+  resetCast(); G.state='CAST'; G.fade=1;
   if(isNushiTime()) toast('✦ この星のヌシ「'+nushiForPlanet(G.planet).name+'」が潜んでいる…！',3.4);
-  else toast(PLANETS[G.planet].name+'に到着！ '+(touchMode()?'押してる間ねらって、離すと投げる':'←→でねらって ○ で投げる'),3.0);
+  else toast(PLANETS[G.planet].name+'に到着！ '+(touchMode()?'長押しでパワーをためて離すと投げる':'○長押しでパワー、離して投げる'),3.0);
 }
+function resetCast(){ S.power=0.1; S.powerDir=1; S.charging=false; S.aimX=AX+200; }
 
-// ---------------- CAST（ねらう→投げる）----------------
+// ---------------- CAST（パワーメーターで飛距離を決めて投げる。位置スライドなし）----------------
+function castPreviewX(){ return U.lerp(AX+200, W-70, S.power); }
 function updateCast(dt){
   if(IN.p.cross){ Sound.SE.back(); G.state='SELECT'; G.fade=1; return; }
-  if(IN.touch.active){
-    if(IN.touch.down){ S.aimX=U.clamp(IN.touch.x, AX+160, W-50); S.power=U.clamp(S.power+dt*1.8,0.25,1); }
-    else if(IN.touch.justUp){ doCast(); }
-  }else{
-    S.aimX=U.clamp(S.aimX+IN.LX*dt*420, AX+160, W-50);
-    if(IN.circle) S.power=U.clamp(S.power+dt*1.6,0.25,1);
-    if(!IN.circle && S.power>0.05) doCast();
+  const holding = IN.touch.active ? IN.touch.down : IN.circle;
+  if(holding){
+    // パワーメーターが上下に振れる（タイミングで飛距離が決まる）
+    S.power += S.powerDir*dt*1.25;
+    if(S.power>=1){ S.power=1; S.powerDir=-1; }
+    if(S.power<=0.1){ S.power=0.1; S.powerDir=1; }
+    S.charging=true;
+    if(Math.random()<0.25) Sound.SE.reel();
+  }else if(S.charging){
+    doCast();
   }
 }
 function doCast(){
   Sound.SE.cast();
-  S.floatX=S.aimX;
+  S.charging=false;
+  S.floatX=castPreviewX();
   const hand=handPos();
   S.lure={x:hand.x,y:hand.y, t:0, dur:0.5, fromX:hand.x, fromY:hand.y, toX:S.floatX, toY:WL};
-  S.power=0; G.state='FLY';
+  G.state='FLY';
 }
 function updateFly(dt){
   const L=S.lure; L.t+=dt;
@@ -190,7 +196,7 @@ function updateFly(dt){
 // ---------------- WAIT（つんつん→アタリ）----------------
 function updateWait(dt){
   // 竿を入れ直してウキの位置を変える（投げ直し）
-  if(IN.p.cross || (IN.touch.active && IN.touch.tap)){ Sound.SE.cast(); G.state='CAST'; S.power=0; toast('竿を上げた。もう一度ねらおう',1.4); return; }
+  if(IN.p.cross || (IN.touch.active && IN.touch.tap)){ Sound.SE.cast(); G.state='CAST'; resetCast(); toast('竿を上げた。もう一度ねらおう',1.4); return; }
   S.waitT+=dt; S.floatBob+=dt;
   updateSwimmers(dt,true);
   let best=null,bd=999;
@@ -234,7 +240,7 @@ function updateEscape(dt){
   e.trail.push({x:e.x,y:e.y}); if(e.trail.length>7) e.trail.shift();
   e.x+=e.vx*60*dt; e.y+=e.vy*60*dt; e.vy+=20*dt;
   if(e.y>=WL && e.vy>0 && e.t<0.5){ Sound.SE.splash(); burst(e.x,WL,8,{c:'#bff',smax:3,up:1,lmax:0.4,rmax:3,g:0.06}); e.y=WL; e.vy*=-0.4; }
-  if(e.t>=e.dur){ G.state='CAST'; S.power=0; }
+  if(e.t>=e.dur){ G.state='CAST'; resetCast(); }
 }
 function drawEscape(){
   const e=S.esc;
@@ -327,7 +333,8 @@ function updateFight(dt){
   S.charge=U.clamp(S.charge,0,100); S.progress=U.clamp(S.progress,0,100);
 
   const wasPinch=S.pinch; S.pinch=S.tension>=80&&!koed;
-  S.eleki=U.clamp(S.eleki+dt*(S.pinch?55:5),0,100);
+  // エレキは「ピンチ中だけ」チャージ＝ピンチを耐えたご褒美の必殺技
+  if(S.pinch) S.eleki=U.clamp(S.eleki+dt*60,0,100);
   if(S.pinch&&!wasPinch) Sound.SE.warn();
 
   if(S.tension>=100){ Sound.SE.snap(); G.shake=14; flash(0.5,'255,80,80');
@@ -374,7 +381,7 @@ function updateResult(dt){ S.resultAnim+=dt;
       G.state='CLEAR'; S.clearAnim=0; Sound.SE.fanfare();
     }else{
       // 通常魚：続けて釣る（規定数に達していれば次の投擲でヌシ出現）
-      G.state='CAST'; S.aimX=540; S.power=0; resetSwimmers();
+      G.state='CAST'; resetCast(); resetSwimmers();
       if(isNushiTime()) toast('✦ ヌシ「'+nushiForPlanet(G.planet).name+'」が現れた…！',3.2);
     }
   }
@@ -431,7 +438,7 @@ function render(){
   // HUD
   drawTop(planet);
   if(FISHING.includes(G.state)) drawBackButton();
-  if(G.state==='CAST') hint('押してる間ねらって、指を離すと投げる','←→:ねらう ○:なげる');
+  if(G.state==='CAST') hint('長押しでパワーをためて、離して投げる','○長押しでパワー→離して投げる');
   if(G.state==='WAIT') waitHint();
   if(G.state==='HOOK') hookHint();
   if(G.state==='FIGHT') fightHUD();
@@ -502,19 +509,22 @@ function drawAngler(planet){
 
 // ---- CAST 照準 ----
 function drawAim(planet){
-  // 着水予測リング
+  const px=castPreviewX();
+  // 着水予測リング（パワーで距離が決まる）
   ctx.strokeStyle=planet.accent; ctx.lineWidth=3;
-  ctx.beginPath(); ctx.ellipse(S.aimX,WL, 26,10,0,0,U.TAU); ctx.stroke();
-  ctx.beginPath(); ctx.ellipse(S.aimX,WL, 12,5,0,0,U.TAU); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(px,WL, 26,10,0,0,U.TAU); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(px,WL, 12,5,0,0,U.TAU); ctx.stroke();
   // 予測アーチ
   const hand=handPos();
   ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.setLineDash([7,7]); ctx.lineWidth=2; ctx.beginPath();
-  for(let i=0;i<=20;i++){ const k=i/20; const x=U.lerp(hand.x,S.aimX,k); const y=U.lerp(hand.y,WL,k)-Math.sin(k*Math.PI)*150;
+  for(let i=0;i<=20;i++){ const k=i/20; const x=U.lerp(hand.x,px,k); const y=U.lerp(hand.y,WL,k)-Math.sin(k*Math.PI)*150;
     i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); } ctx.stroke(); ctx.setLineDash([]);
-  // パワー
-  if(S.power>0.05){ ctx.fillStyle='#ffd34d'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('POWER',S.aimX,WL+30); roundRect(ctx,S.aimX-40,WL+36,80,8,4); ctx.fillStyle='rgba(255,255,255,.2)'; ctx.fill();
-    roundRect(ctx,S.aimX-40,WL+36,80*S.power,8,4); ctx.fillStyle='#ffd34d'; ctx.fill(); ctx.textAlign='left'; }
+  // パワーメーター（キャラのそば・横バー）
+  const bx=AX-30, by=WL+34, bw=180, bh=16;
+  ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; ctx.textAlign='left'; ctx.fillText('パワー（長押しで調整→離す）',bx,by-6);
+  roundRect(ctx,bx,by,bw,bh,8); ctx.fillStyle='rgba(255,255,255,.18)'; ctx.fill();
+  roundRect(ctx,bx,by,bw*S.power,bh,8); ctx.fillStyle=S.power>0.85?'#ff5252':(S.power>0.6?'#ffd34d':'#7fd'); ctx.fill();
+  ctx.textAlign='left';
 }
 function drawLure(){ ctx.fillStyle='#ff5252'; ctx.beginPath(); ctx.arc(S.lure.x,S.lure.y,6,0,U.TAU); ctx.fill();
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(S.lure.x,S.lure.y-2,6,Math.PI,0); ctx.fill(); }
@@ -600,18 +610,22 @@ function fightHUD(){
   roundRect(ctx,tx,ty,tw*tv,th,7); ctx.fillStyle=tcol; ctx.fill();
   ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.fillText('テンション（切れたらアウト）',tx,ty-5);
   ctx.fillStyle='#ff3b3b'; ctx.fillRect(tx+tw*0.8-1,ty-2,2,th+4);
+  // こうげき／エレキ ゲージ（役割の違いを見せる）
+  const cv=S.charge/100, ev=S.eleki/100;
+  bar(W/2-170,H-66,165,10, cv, cv>=1?'#ffd34d':'#cfa030', 'こうげき'+(cv>=1?' READY!':''));
+  bar(W/2+5,  H-66,165,10, ev, ev>=1?'#9cf':'#46618a', 'エレキ⚡'+(ev>=1?' READY!':'（ピンチでたまる）'));
   // 寄せ（LANDING）
   bar(W/2-170,H-44,340,12,S.progress/100,'#ffd34d','あと'+Math.max(0,Math.round(100-S.progress))+'%で GET');
 
   // 大きな状況プロンプト
   if(S.fishHP<=0) bigPrompt('ダウン！ 巻き上げろ！','#7fff8a');
-  else if(S.pinch) bigPrompt(touchMode()?(S.eleki>=100?'⚡タップでエレキ反撃！':'危険！力をためろ'):'ピンチ！ ○でエレキ','#ff6b6b');
-  else if(S.eleki>=100) bigPrompt(touchMode()?'⚡タップでエレキ！':'○でエレキ！','#9cf');
+  else if(S.pinch&&S.eleki>=100) bigPrompt(touchMode()?'⚡タップでエレキ反撃！':'⚡○でエレキ反撃！','#9cf');
+  else if(S.pinch) bigPrompt('ピンチ！ 巻くのを止めて耐えろ','#ff6b6b');
   else if(S.charge>=100) bigPrompt(touchMode()?'タップでこうげき！':'○でこうげき！','#ffd34d');
   else if(S.mode==='run') bigPrompt('ひっぱられてる！ 巻くのを止めて！','#ffb13b');
   else bigPrompt(touchMode()?'いまだ！ なぞって巻け！':'いまだ！ 巻け！','#7fff8a');
 
-  hint('なぞる=巻く／タップ=こうげき・エレキ','方向キー=巻く ○=こうげき/エレキ');
+  hint('なぞる=巻く／タップ=こうげき(or エレキ)','方向キー=巻く ○=こうげき/エレキ');
 }
 function catchHUD(){
   const a=U.clamp(S.catchAnim*2,0,1); ctx.fillStyle=`rgba(0,0,0,${0.35*a})`; ctx.fillRect(0,0,W,H);
