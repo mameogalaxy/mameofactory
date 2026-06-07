@@ -166,8 +166,8 @@ function updateCast(dt){
   if(IN.p.cross){ Sound.SE.back(); G.state='SELECT'; G.fade=1; return; }
   const holding = IN.touch.active ? IN.touch.down : IN.circle;
   if(holding){
-    // ゲージは常に上下（左右）に振れる。押しっぱでMAXにはならない＝離すタイミングがコツ
-    S.power += S.powerDir*dt*1.35;
+    // ゲージは常に上下（左右）に振れる。押しっぱでMAXにはならない＝離すタイミングがコツ（速め）
+    S.power += S.powerDir*dt*1.75;
     if(S.power>=1){ S.power=1; S.powerDir=-1; }
     if(S.power<=0.08){ S.power=0.08; S.powerDir=1; }
     S.charging=true;
@@ -179,22 +179,23 @@ function doCast(){
   Sound.SE.cast();
   S.charging=false;
   S.castPower=S.power;
-  S.goodCast = S.power>=0.9 ? 2 : (S.power>=0.75 ? 1 : 0);  // MAX付近=パーフェクト
+  // MAX付近=パーフェクト（狭い）。パーフェクトは必ず何か釣れる
+  S.goodCast = S.power>=0.95 ? 2 : (S.power>=0.8 ? 1 : 0);
+  S.guaranteeBite = (S.goodCast===2);
   S.floatX=castPreviewX();
   const hand=handPos();
   S.lure={x:hand.x,y:hand.y, t:0, dur:0.5, fromX:hand.x, fromY:hand.y, toX:S.floatX, toY:WL};
   if(S.goodCast){ Sound.SE.select(); flash(0.3,'255,240,180');
-    toast(S.goodCast===2?'✦ パーフェクトキャスト！ 大物の予感…':'ナイスキャスト！',2.0); }
+    toast(S.goodCast===2?'✦ パーフェクトキャスト！ 必ず食いつく…！':'ナイスキャスト！',2.0); }
   G.state='FLY';
 }
-// キャスト品質で釣れる魚を決める（MAX付近＝レア/大型/ヌシ）
+// キャスト品質で釣れる魚を決める（MAX付近＝レア/大型）。ヌシは規定数を釣るまで出ない
 function pickCastFish(species){
   const q=S.castPower||0, planet=G.planet;
   if(isNushiTime()) return species;                       // 既にヌシ狙い
-  if(q>=0.9 && !G.nushiDone[planet] && nushiForPlanet(planet) && Math.random()<0.5) return nushiForPlanet(planet);
   const pool=normalFishForPlanet(planet).slice().sort((a,b)=>a.tier-b.tier);
-  if(q>=0.9) return pool[pool.length-1];                  // 最高レア
-  if(q>=0.75 && Math.random()<0.7) return pool[pool.length-1];
+  if(q>=0.95) return pool[pool.length-1];                 // パーフェクト＝最高レア
+  if(q>=0.8 && Math.random()<0.7) return pool[pool.length-1];
   return species;
 }
 function updateFly(dt){
@@ -203,7 +204,15 @@ function updateFly(dt){
   L.x=U.lerp(L.fromX,L.toX,k);
   L.y=U.lerp(L.fromY,L.toY,k) - Math.sin(k*Math.PI)*150;   // 放物線
   if(k>=1){ Sound.SE.splash(); burst(S.floatX,WL,16,{c:'#bff',smax:4,up:2,lmax:0.6,rmax:4,g:0.06});
-    G.state='WAIT'; S.waitT=0; S.nibble=0; S.biteFish=null; S.floatBob=0; }
+    G.state='WAIT'; S.waitT=0; S.nibble=0; S.biteFish=null; S.floatBob=0;
+    if(S.guaranteeBite){
+      // パーフェクトキャスト：必ず1匹が食いつくようにロックして寄せる
+      if(S.swimmers.length===0) resetSwimmers();
+      let near=S.swimmers[0], bd=1e9;
+      for(const s of S.swimmers){ const d=Math.abs(s.x-S.floatX); if(d<bd){bd=d;near=s;} }
+      if(near){ near.state='approach'; near.locked=true; near.x=S.floatX+U.rand(-120,120); near.y=WL+U.rand(40,90); }
+    }
+  }
 }
 
 // ---------------- WAIT（つんつん→アタリ）----------------
@@ -219,14 +228,14 @@ function updateWait(dt){
     if(S.nibble>U.rand(0.7,1.4)) triggerBite(best);
   }else S.nibble=Math.max(0,S.nibble-dt*0.6);
 }
-function triggerBite(s){ s.d=pickCastFish(s.d); Sound.SE.bite(); S.biteFish=s; S.biteWindow=1.1; G.shake=6; G.state='HOOK'; }
+function triggerBite(s){ s.d=pickCastFish(s.d); S.guaranteeBite=false; Sound.SE.bite(); S.biteFish=s; S.biteWindow=1.1; G.shake=6; G.state='HOOK'; }
 function updateSwimmers(dt,lure){
   for(const s of S.swimmers){ s.phase+=dt;
     if(lure && s.state!=='approach' && Math.abs(s.x-S.floatX)<260 && Math.random()<0.015*s.d.speed) s.state='approach';
     if(s.state==='approach'){
       const tx=S.floatX, ty=WL+34, dx=tx-s.x, dy=ty-s.y, m=Math.hypot(dx,dy)||1;
       s.x+=dx/m*dt*90*s.d.speed; s.y+=dy/m*dt*90*s.d.speed;
-      if(Math.random()<0.004) s.state='wander';
+      if(!s.locked && Math.random()<0.004) s.state='wander';   // ロック中(パーフェクト)は逃げない
     }else{
       s.x+=s.vx*40*dt; s.y+=Math.sin(s.phase)*12*dt;
     }
@@ -239,7 +248,7 @@ function updateSwimmers(dt,lure){
 function updateHook(dt){
   S.biteWindow-=dt;
   if(uiConfirm()){ startFight(S.biteFish); return; }
-  if(S.biteWindow<=0){ S.biteFish.state='wander'; startEscape(S.biteFish.d, S.floatX, WL-6, 'バレた！'); }
+  if(S.biteWindow<=0){ S.biteFish.state='wander'; S.biteFish.locked=false; startEscape(S.biteFish.d, S.floatX, WL-6, 'バレた！'); }
 }
 
 // ---------------- ESCAPE（バレた／逃走モーション）----------------
@@ -534,10 +543,11 @@ function drawAim(planet){
   const bx=AX-30, by=WL+34, bw=200, bh=18;
   ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; ctx.textAlign='left'; ctx.fillText('パワー：ゲージを見て離す！ 右端=大物のチャンス',bx,by-6);
   roundRect(ctx,bx,by,bw,bh,9); ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fill();
-  // MAXスイートゾーン
-  roundRect(ctx,bx+bw*0.9,by,bw*0.1,bh,4); ctx.fillStyle='rgba(255,211,77,.5)'; ctx.fill();
+  // MAXスイートゾーン（狭い＝難しい）
+  roundRect(ctx,bx+bw*0.8,by,bw*0.15,bh,3); ctx.fillStyle='rgba(255,233,138,.4)'; ctx.fill();
+  roundRect(ctx,bx+bw*0.95,by,bw*0.05,bh,3); ctx.fillStyle='rgba(255,211,77,.75)'; ctx.fill();
   // 現在値
-  roundRect(ctx,bx,by,bw*S.power,bh,9); ctx.fillStyle=S.power>=0.9?'#ffd34d':(S.power>=0.75?'#ffe98a':'#7fd'); ctx.fill();
+  roundRect(ctx,bx,by,bw*S.power,bh,9); ctx.fillStyle=S.power>=0.95?'#ffd34d':(S.power>=0.8?'#ffe98a':'#7fd'); ctx.fill();
   // つまみ
   ctx.fillStyle='#fff'; ctx.fillRect(bx+bw*S.power-2,by-3,4,bh+6);
   ctx.textAlign='left';
