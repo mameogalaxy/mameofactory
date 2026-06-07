@@ -303,7 +303,7 @@ function drawEscape(){
   // バレた！
   const a=U.clamp(1-e.t/e.dur*0.6,0,1); ctx.globalAlpha=a;
   ctx.fillStyle='#ff6b6b'; ctx.font='bold 40px sans-serif'; ctx.textAlign='center'; ctx.shadowColor='#000'; ctx.shadowBlur=8;
-  ctx.fillText(e.msg, S.floatX, WL-70); ctx.shadowBlur=0; ctx.globalAlpha=1; ctx.textAlign='left';
+  ctx.fillText(e.msg, W/2, 150); ctx.shadowBlur=0; ctx.globalAlpha=1; ctx.textAlign='left';
 }
 
 // ---------------- FIGHT ----------------
@@ -367,14 +367,17 @@ function updateFight(dt){
   const reeling=reelAmt>0.05;
 
   if(!koed){
-    // 魚は常に引いている：何もしないと少しずつ上がる（ゆっくり）。巻きの無理が一番危険
-    let ten=(S.mode==='run'?5:2)*(0.7+S.fish.power*0.25)*(0.9+0.2*B.w);
-    if(reeling){
-      if(S.mode==='run'){ ten+=reelAmt*32; S.progress=Math.max(0,S.progress-reelAmt*dt*3); if(Math.random()<0.2)Sound.SE.warn(); }
-      else { ten+=reelAmt*5; S.progress+=reelAmt*dt*16/B.w; S.eleki+=reelAmt*dt*4; if(Math.random()<0.3)Sound.SE.reel(); }
-      S.charge += dt*30;               // 巻いている時だけ こうげきゲージがたまる
+    let ten;
+    if(S.mode==='run'){
+      // 暴れ中：常にじわじわ上がる。巻くと急上昇＆逆に出される（手を止めて耐える）
+      ten = 7*(0.7+S.fish.power*0.25)*(0.9+0.2*B.w);
+      if(reeling){ ten += reelAmt*30; S.progress=Math.max(0,S.progress-reelAmt*dt*3); if(Math.random()<0.2)Sound.SE.warn(); }
+    }else{
+      // おとなしい時：巻けば寄る（少し上がる）／手を止めればテンション回復
+      if(reeling){ ten = reelAmt*4; S.progress+=reelAmt*dt*16/B.w; S.eleki+=reelAmt*dt*4; S.charge+=dt*30; if(Math.random()<0.3)Sound.SE.reel(); }
+      else ten = -8;     // ← 巻くのをやめると回復（赤からの立て直しが可能）
     }
-    S.tension += dt*ten;               // テンションを下げる手段は こうげき／エレキ のみ
+    S.tension += dt*ten;
   }else{
     S.tension=U.lerp(S.tension,8,dt*2); S.progress += reelAmt*dt*30;  // KO後も巻かないと寄らない
   }
@@ -692,7 +695,27 @@ function fightHUD(){
   else if(S.mode==='run') bigPrompt('ひっぱられてる！ 巻くのを止めて！','#ffb13b');
   else bigPrompt(touchMode()?'いまだ！ なぞって巻け！':'いまだ！ 巻け！','#7fff8a');
 
-  hint('なぞる=巻く／タップ=こうげき(or エレキ)','方向キー=巻く ○=こうげき/エレキ');
+  if(S.fishHP>0) drawReelGuide();
+  hint('なぞってぐるぐる巻く／タップ=こうげき(or エレキ)','方向キー=巻く ○=こうげき/エレキ');
+}
+// 下部に「ぐるぐる巻く」モーションをオーバレイ表示
+function drawReelGuide(){
+  const cx=96, cy=H-138, r=26;
+  const active=(S.mode!=='run');     // おとなしい時＝巻きどき
+  ctx.save(); ctx.globalAlpha=active?0.95:0.4;
+  // 円弧の矢印
+  ctx.strokeStyle=active?'#7fff8a':'#9cf'; ctx.lineWidth=5; ctx.lineCap='round';
+  ctx.beginPath(); ctx.arc(cx,cy,r,-0.4,Math.PI*1.5); ctx.stroke();
+  // 矢じり（終点）
+  const ea=Math.PI*1.5, ex=cx+Math.cos(ea)*r, ey=cy+Math.sin(ea)*r;
+  ctx.fillStyle=active?'#7fff8a':'#9cf';
+  ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ex-10,ey-9); ctx.lineTo(ex+9,ey-10); ctx.closePath(); ctx.fill();
+  // 周回する指（白丸）
+  const ang=G.t*5; const dx=cx+Math.cos(ang)*r, dy=cy+Math.sin(ang)*r;
+  ctx.fillStyle='#fff'; ctx.shadowColor='#fff'; ctx.shadowBlur=8; ctx.beginPath(); ctx.arc(dx,dy,8,0,U.TAU); ctx.fill(); ctx.shadowBlur=0;
+  ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
+  ctx.fillText(touchMode()?'ぐるぐる巻く':'方向キーで巻く',cx,cy+r+18); ctx.textAlign='left';
+  ctx.restore();
 }
 function catchHUD(){
   const a=U.clamp(S.catchAnim*2,0,1); ctx.fillStyle=`rgba(0,0,0,${0.35*a})`; ctx.fillRect(0,0,W,H);
