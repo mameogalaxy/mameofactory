@@ -57,6 +57,7 @@ const Sound = (() => {
       setTimeout(()=>tone(80,0.4,'sawtooth',0.5,40),120); },
     ko:()=>{ [660,880,1320].forEach((f,i)=>setTimeout(()=>tone(f,0.13,'square',0.5),i*90)); },
     snap:()=>{ noise(0.2,0.5,300); tone(200,0.25,'sawtooth',0.5,50); },
+    miss:()=>{ tone(950,0.2,'sawtooth',0.4,120); noise(0.16,0.22,1600); },   // バレた！ひゅん
     fanfare:()=>{ [523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>tone(f,0.22,'square',0.5),i*110)); },
     warn:()=>tone(440,0.06,'square',0.35),
   };

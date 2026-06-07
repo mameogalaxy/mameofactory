@@ -89,12 +89,13 @@ function update(dt){
   if(G.msgT>0){ G.msgT-=dt; if(G.msgT<=0) G.msg=null; }
   updateP(dt);
   switch(G.state){
-    case 'TITLE': updateTitle(); break;
+    case 'TITLE': updateTitle(dt); break;
     case 'SELECT': updateSelect(dt); break;
     case 'CAST': updateCast(dt); break;
     case 'FLY': updateFly(dt); break;
     case 'WAIT': updateWait(dt); break;
     case 'HOOK': updateHook(dt); break;
+    case 'ESCAPE': updateEscape(dt); break;
     case 'FIGHT': updateFight(dt); break;
     case 'CATCH': updateCatch(dt); break;
     case 'RESULT': updateResult(dt); break;
@@ -104,8 +105,32 @@ function update(dt){
 }
 
 // ---------------- TITLE ----------------
-function updateTitle(){ if(uiConfirm()||IN.p.cross){ Sound.ensure(); Sound.startBGM(); Sound.SE.select();
-  G.state='SELECT'; G.fade=1; G.selCursor=Math.min(G.unlocked-1,G.selCursor); } }
+let titleSel=0, titleCD=0;
+function hasSave(){ return G.unlocked>1 || (G.caught&&G.caught.length>0) || G.planetProgress.some(x=>x>0) || G.nushiDone.some(x=>x); }
+function titleButtons(){ return [
+  {key:'continue', label:'つづきから', y:316, enabled:hasSave()},
+  {key:'new',      label:'はじめから', y:382, enabled:true},
+]; }
+function confirmTitle(){
+  Sound.ensure(); Sound.startBGM(); Sound.SE.select();
+  if(titleSel===1){ G.unlocked=1; G.caught=[]; G.planetProgress=[0,0,0,0,0]; G.nushiDone=[false,false,false,false,false]; save(); G.selCursor=0; }
+  G.state='SELECT'; G.fade=1; G.selCursor=Math.min(G.unlocked-1,G.selCursor);
+}
+function updateTitle(dt){
+  if(titleCD>0) titleCD-=dt;
+  const btns=titleButtons();
+  if(!btns[0].enabled) titleSel=1;
+  const up=(IN.LY<-0.5||IN.RY<-0.5), dn=(IN.LY>0.5||IN.RY>0.5);
+  if((up||dn)&&titleCD<=0){ titleSel=up?0:1; if(!btns[0].enabled) titleSel=1; titleCD=0.2; Sound.SE.move(); }
+  if(IN.touch.active && IN.touch.tap){
+    for(let i=0;i<btns.length;i++){ const b=btns[i];
+      if(Math.abs(IN.touch.tapX-W/2)<140 && Math.abs(IN.touch.tapY-b.y)<26){
+        if(b.enabled){ titleSel=i; confirmTitle(); } else { Sound.SE.back(); toast('セーブデータがありません'); }
+        return; } }
+    return;
+  }
+  if(IN.p.circle||IN.p.start) confirmTitle();
+}
 
 // ---------------- SELECT ----------------
 let selCD=0;
@@ -189,7 +214,33 @@ function updateSwimmers(dt,lure){
 function updateHook(dt){
   S.biteWindow-=dt;
   if(uiConfirm()){ startFight(S.biteFish); return; }
-  if(S.biteWindow<=0){ Sound.SE.back(); toast('にげられた…！ もう一度なげよう'); S.biteFish.state='wander'; G.state='CAST'; }
+  if(S.biteWindow<=0){ S.biteFish.state='wander'; startEscape(S.biteFish.d, S.floatX, WL-6, 'バレた！'); }
+}
+
+// ---------------- ESCAPE（バレた／逃走モーション）----------------
+function startEscape(d,x,y,msg){
+  S.esc={ d, x, y, vx:U.rand(9,13)*(x>W*0.6?-1:1), vy:-7.5, t:0, dur:1.1, trail:[], msg, dir:(x>W*0.6?1:-1) };
+  G.state='ESCAPE'; Sound.SE.miss(); G.shake=5;
+  burst(x,WL,12,{c:'#bff',smax:4,up:2,lmax:0.5,rmax:4,g:0.06});
+}
+function updateEscape(dt){
+  const e=S.esc; e.t+=dt;
+  e.trail.push({x:e.x,y:e.y}); if(e.trail.length>7) e.trail.shift();
+  e.x+=e.vx*60*dt; e.y+=e.vy*60*dt; e.vy+=20*dt;
+  if(e.y>=WL && e.vy>0 && e.t<0.5){ Sound.SE.splash(); burst(e.x,WL,8,{c:'#bff',smax:3,up:1,lmax:0.4,rmax:3,g:0.06}); e.y=WL; e.vy*=-0.4; }
+  if(e.t>=e.dur){ G.state='CAST'; S.power=0; }
+}
+function drawEscape(){
+  const e=S.esc;
+  // 残像（スピード感）
+  for(let i=0;i<e.trail.length;i++){ const tr=e.trail[i]; ctx.globalAlpha=(i/e.trail.length)*0.35;
+    drawSpaceFish(ctx,tr.x,tr.y,1.4*e.d.size,e.dir,G.t,e.d,{glow:false}); }
+  ctx.globalAlpha=1;
+  drawSpaceFish(ctx,e.x,e.y,1.5*e.d.size,e.dir,G.t*2,e.d,{glow:true});
+  // バレた！
+  const a=U.clamp(1-e.t/e.dur*0.6,0,1); ctx.globalAlpha=a;
+  ctx.fillStyle='#ff6b6b'; ctx.font='bold 40px sans-serif'; ctx.textAlign='center'; ctx.shadowColor='#000'; ctx.shadowBlur=8;
+  ctx.fillText(e.msg, S.floatX, WL-70); ctx.shadowBlur=0; ctx.globalAlpha=1; ctx.textAlign='left';
 }
 
 // ---------------- FIGHT ----------------
@@ -260,7 +311,7 @@ function updateFight(dt){
   if(S.pinch&&!wasPinch) Sound.SE.warn();
 
   if(S.tension>=100){ Sound.SE.snap(); G.shake=14; flash(0.5,'255,80,80');
-    toast('ライン切れ！ にげられた…',2.6); G.state='CAST'; return; }
+    startEscape(S.fish, S.fishX, S.fishY, 'ラインが切れた！'); return; }
 
   if(strike){ if(!doEleki()) doAttack(); }
   if(S.hitFx>0)S.hitFx-=dt; if(S.elekiFx>0)S.elekiFx-=dt;
@@ -345,6 +396,7 @@ function render(){
   if(G.state==='FLY') drawLure();
   if(G.state==='WAIT'||G.state==='HOOK'){ drawUnderwaterFish(); drawFloat(); if(G.state==='HOOK') drawHookMark(); }
   if(G.state==='FIGHT') drawFightFish();
+  if(G.state==='ESCAPE') drawEscape();
   drawP();
 
   // HUD
@@ -589,7 +641,21 @@ function renderTitle(){
   ctx.save(); ctx.translate(W/2,150); const bob=Math.sin(G.t*1.5)*4;
   ctx.fillStyle='#39e0ff'; ctx.font='bold 60px sans-serif'; ctx.shadowColor='#39e0ff'; ctx.shadowBlur=26; ctx.fillText('STELLAR ANGLER',0,bob); ctx.shadowBlur=0;
   ctx.fillStyle='#ffd34d'; ctx.font='bold 24px "Hiragino Maru Gothic Pro",sans-serif'; ctx.fillText('〜 伝説のヌシを求めて 〜',0,40+bob); ctx.restore();
-  if(Math.sin(G.t*4)>0){ ctx.fillStyle='#fff'; ctx.font='bold 22px sans-serif'; ctx.fillText(touchMode()?'タップでスタート':'○ / SPACE でスタート',W/2,300); }
+  drawTitleButtons();
+  ctx.fillStyle='#7f9'; ctx.font='13px sans-serif'; ctx.textAlign='center';
+  ctx.fillText(touchMode()?'ボタンをタップ':'↑↓で選択 ○/SPACEで決定',W/2,H-26);
+  ctx.textAlign='left';
+}
+function drawTitleButtons(){
+  const btns=titleButtons();
+  for(let i=0;i<btns.length;i++){ const b=btns[i], sel=(i===titleSel)&&b.enabled;
+    const w=280,h=48,x=W/2-w/2,y=b.y-h/2;
+    roundRect(ctx,x,y,w,h,12);
+    ctx.fillStyle=!b.enabled?'rgba(70,70,82,.5)':(sel?'rgba(57,224,255,.92)':'rgba(255,255,255,.12)'); ctx.fill();
+    if(sel){ ctx.lineWidth=3; ctx.strokeStyle='#fff'; roundRect(ctx,x,y,w,h,12); ctx.stroke(); }
+    ctx.fillStyle=!b.enabled?'#8a8a96':(sel?'#03203a':'#fff'); ctx.font='bold 22px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(b.label,W/2,b.y+8);
+  }
   ctx.textAlign='left';
 }
 function renderSelect(){
