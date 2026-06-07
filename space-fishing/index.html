@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>STELLAR ANGLER 〜伝説のヌシを求めて〜</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="game" width="960" height="600"></canvas>
+
+  <!-- 操作ガイド（コントローラ未接続時に表示） -->
+  <div id="hint" class="hint">
+    <strong>DUALSHOCK 2 推奨</strong>（ゲームパッド接続でフル機能）<br>
+    キーボードでも遊べます： 左スティック=<b>WASD</b> / 右スティック=<b>方向キー</b> / ○=<b>Space</b> / △エレキ=<b>E</b> / ×=<b>Z</b>
+  </div>
+
+  <div id="loading" class="overlay">
+    <div class="loadbox">
+      <div class="logo-mini">🎣🪐</div>
+      <div>NOW LOADING...</div>
+      <div class="bar"><div id="loadbar"></div></div>
+    </div>
+  </div>
+</div>
+
+<audio id="bgm" loop preload="auto"></audio>
+
+<script src="js/utils.js"></script>
+<script src="js/input.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/fish.js"></script>
+<script src="js/planets.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
