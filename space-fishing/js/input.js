@@ -28,6 +28,7 @@ const Input = (() => {
     swipeX:0, swipeY:0,  // up時のスワイプ量
     tap:false, tapX:0, tapY:0,
     active:false,        // タッチ環境で実際に触れた事があるか
+    isTouch:false,       // 直近のポインターがタッチ/ペンか（マウスはPC操作扱い）
     holdT:0,             // 押し続けている時間
   };
   let canvas=null, frameDX=0, frameDY=0, lastX=0, lastY=0;
@@ -38,9 +39,10 @@ const Input = (() => {
     const r=canvas.getBoundingClientRect();
     return { x:(cx-r.left)/r.width*960, y:(cy-r.top)/r.height*600 };
   }
-  function onDown(cx,cy){
+  function onDown(cx,cy,pointerType='touch'){
     const p=toCanvas(cx,cy);
     T.down=true; pendDown=true; T.active=true;
+    T.isTouch=pointerType!=='mouse';
     T.x=p.x; T.y=p.y; lastX=p.x; lastY=p.y;
     T.moved=0; pendGX=0; pendGY=0;
     if(window.Sound&&Sound.ensure) Sound.ensure();
@@ -63,7 +65,7 @@ const Input = (() => {
     const tgt=canvas||window;
     const opt={passive:false};
     // Pointer Events（モバイル/マウス両対応）
-    tgt.addEventListener('pointerdown', e=>{ onDown(e.clientX,e.clientY); e.preventDefault(); }, opt);
+    tgt.addEventListener('pointerdown', e=>{ onDown(e.clientX,e.clientY,e.pointerType||'touch'); e.preventDefault(); }, opt);
     window.addEventListener('pointermove', e=>{ onMove(e.clientX,e.clientY); }, opt);
     window.addEventListener('pointerup', e=>{ onUp(); }, opt);
     window.addEventListener('pointercancel', e=>{ onUp(); }, opt);

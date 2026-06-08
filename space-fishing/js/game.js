@@ -20,9 +20,13 @@ const FAR_X = 860;     // 魚が暴れる遠い位置
 const NEAR_X = 300;    // 寄せきった位置
 const PINCH  = 82;     // この値以上でピンチ（救済エレキがたまる）
 
+const PLANET_COUNT = PLANETS.length;
+const DEFAULT_PROGRESS = Array(PLANET_COUNT).fill(0);
+const DEFAULT_NUSHI_DONE = Array(PLANET_COUNT).fill(false);
+
 const G = {
   state:'LOADING', t:0, planet:0, selCursor:0, unlocked:1, difficulty:1,
-  caught:[], planetProgress:[0,0,0,0,0], nushiDone:[false,false,false,false,false],
+  caught:[], planetProgress:DEFAULT_PROGRESS.slice(), nushiDone:DEFAULT_NUSHI_DONE.slice(),
   shake:0, flash:0, flashCol:'255,255,255', msg:null, msgT:0, fade:1,
 };
 // 難易度：tenMul=テンションの上がりやすさ hpMul=魚の体力 fillMul=こうげき/エレキの溜まり reachMul=寄せ上限のキツさ runMul=暴れの長さ
@@ -38,13 +42,22 @@ const QUOTA = [2,2,3,3,3];
 // 規定数の通常魚を釣るとヌシが出現。討伐後も再度規定数を釣れば「ヌシ再戦」が出る（全クリ後もヌシは一応出てくる）
 function isNushiTime(){ return QUOTA[G.planet]>0 && G.planetProgress[G.planet] >= QUOTA[G.planet]; }
 
+function savedNumber(v,min,max,fallback){
+  return Number.isFinite(v) ? U.clamp(Math.floor(v),min,max) : fallback;
+}
+function savedNumberArray(v,fallback){
+  return fallback.map((x,i)=>Number.isFinite(v?.[i]) ? Math.max(0,Math.floor(v[i])) : x);
+}
+function savedBoolArray(v,fallback){
+  return fallback.map((x,i)=>typeof v?.[i]==='boolean' ? v[i] : x);
+}
 try{
   const s=JSON.parse(localStorage.getItem('stellar_angler')||'{}');
-  if(s.unlocked) G.unlocked=s.unlocked;
-  if(s.caught) G.caught=s.caught;
-  if(s.planetProgress) G.planetProgress=s.planetProgress;
-  if(s.nushiDone) G.nushiDone=s.nushiDone;
-  if(typeof s.difficulty==='number') G.difficulty=s.difficulty;
+  G.unlocked=savedNumber(s.unlocked,1,PLANET_COUNT,G.unlocked);
+  G.caught=Array.isArray(s.caught) ? s.caught : [];
+  G.planetProgress=savedNumberArray(s.planetProgress,DEFAULT_PROGRESS);
+  G.nushiDone=savedBoolArray(s.nushiDone,DEFAULT_NUSHI_DONE);
+  G.difficulty=savedNumber(s.difficulty,0,DIFF.length-1,G.difficulty);
 }catch(e){}
 function save(){ try{ localStorage.setItem('stellar_angler', JSON.stringify({
   unlocked:G.unlocked, caught:G.caught, planetProgress:G.planetProgress, nushiDone:G.nushiDone, difficulty:G.difficulty })); }catch(e){} }
@@ -75,6 +88,7 @@ const S = {
   mode:'run', modeT:0, koTimer:0, hitFx:0, elekiFx:0,
   boss:false, bossPhase:1, bossPhaseMax:1, phaseFx:0,
   fishX:FAR_X, fishY:WL-120, jumpT:0, jumpDur:1, jumpFrom:WL, jumpTo:WL-160,
+  fishScale:1, fishBank:0, fishDepth:0,
   caughtData:null, catchAnim:0, resultAnim:0, clearAnim:0, endAnim:0,
 };
 
@@ -93,7 +107,7 @@ function resetSwimmers(){
 
 let IN=null;
 function uiConfirm(){ return IN.p.circle || IN.p.start || (IN.touch.active && IN.touch.tap); }
-function touchMode(){ return IN.touch.active; }
+function touchMode(){ return IN.touch.isTouch; }
 
 // ---------------- ループ ----------------
 let last=performance.now();
@@ -134,7 +148,7 @@ function titleButtons(){ return [
 ]; }
 function confirmTitle(){
   Sound.ensure(); Sound.startBGM(); Sound.SE.select();
-  if(titleSel===1){ G.unlocked=1; G.caught=[]; G.planetProgress=[0,0,0,0,0]; G.nushiDone=[false,false,false,false,false]; save(); G.selCursor=0; }
+  if(titleSel===1){ G.unlocked=1; G.caught=[]; G.planetProgress=DEFAULT_PROGRESS.slice(); G.nushiDone=DEFAULT_NUSHI_DONE.slice(); save(); G.selCursor=0; }
   G.state='SELECT'; G.fade=1; G.selCursor=Math.min(G.unlocked-1,G.selCursor);
 }
 function updateTitle(dt){
@@ -339,11 +353,13 @@ function beh(d){
   };
   return M[d.temper]||M.steady;
 }
+function isFinalBoss(d){ return d && d.id==='NUSHI'; }
 function startFight(s){
   const d=s.d;
-  // ヌシは形態変化するので個体をクローン（見た目を形態ごとに変える）
-  S.boss=!!d.boss; S.bossPhase=1; S.bossPhaseMax=d.boss?3:1; S.phaseFx=0;
+  // 形態変化は最終ボスだけ。各惑星のヌシは一形態の強敵にする。
+  S.boss=!!d.boss; S.bossPhase=1; S.bossPhaseMax=isFinalBoss(d)?3:1; S.phaseFx=0;
   S.fish=d.boss?{...d}:d;
+  if(S.boss) S.fish.phase=1;
   S.fishMax=Math.round(d.hp*D().hpMul); S.fishHP=S.fishMax; S.beh=beh(d);
   S.tension=18; S.progress=0; S.charge=0; S.eleki=0; S.pinch=false;
   S.mode='run'; S.modeT=U.rand(1.0,1.8)*S.beh.rd; S.koTimer=0; S.hitFx=0; S.elekiFx=0;
@@ -351,12 +367,12 @@ function startFight(s){
   const i=S.swimmers.indexOf(s); if(i>=0)S.swimmers.splice(i,1);
   G.state='FIGHT'; Sound.SE.bite(); flash(0.4);
   burst(FAR_X,WL,20,{c:'#bff',smax:5,up:3,lmax:0.7,rmax:5,g:0.05});
-  const intro = d.boss? 'ヌシ「'+d.name+'」だ！ 全形態を打ち破れ！' : 'ヒット！ '+d.name+'！ '+(touchMode()?'なぞって巻け！ おとなしい時がチャンス':'方向キーで巻け！');
-  toast(intro,2.8);
+  G.msg=null; G.msgT=0;
 }
-// ヌシの形態移行：体力を回復し暴れ強化、引き離して見た目も変化
+// 最終ボスの形態移行：体力を回復し暴れ強化、引き離して見た目も変化
 function nextBossPhase(){
   S.bossPhase++;
+  S.fish.phase=S.bossPhase;
   const frac = S.bossPhase===2?0.62:0.85;     // 形態ごとの体力割合
   S.fishHP = Math.round(S.fishMax*frac);
   S.progress = Math.max(0, S.progress-32);     // 暴れて一気に引き離す
@@ -366,12 +382,11 @@ function nextBossPhase(){
   // 暴れを激化
   S.beh={...S.beh, rr:S.beh.rr*1.18, rd:S.beh.rd*1.22, da:S.beh.da*1.15};
   // 見た目を「怒り形態」に変化
-  if(S.bossPhase===2){ S.fish.size*=1.06; S.fish.spike=(S.fish.spike||1)*1.2; S.fish.glow='rgba(255,170,60,.8)'; }
-  else { S.fish.size*=1.08; S.fish.spike=(S.fish.spike||1)*1.35; S.fish.c1='#ff8a7a'; S.fish.glow='rgba(255,80,90,.9)'; }
+  if(S.bossPhase===2){ S.fish.size*=1.06; S.fish.spike=(S.fish.spike||1)*1.2; S.fish.glow='rgba(255,170,60,.8)'; S.fish.mid='#fff0a0'; }
+  else { S.fish.size*=1.08; S.fish.spike=(S.fish.spike||1)*1.35; S.fish.c1='#ff8a7a'; S.fish.mid='#ffd34d'; S.fish.glow='rgba(255,80,90,.9)'; }
   S.phaseFx=1; G.shake=26; flash(0.85, S.bossPhase===2?'255,200,90':'255,90,90');
   Sound.SE.eleki&&Sound.SE.eleki(); Sound.SE.warn&&Sound.SE.warn();
   burst(S.fishX,S.fishY,46,{c:'#ffd34d',smax:10,up:2,lmax:1.3,rmax:10,glow:true});
-  toast(S.bossPhase===2?'第二形態！ さらに荒れ狂う！':'最終形態！ 全力で抗ってくる！',2.6);
 }
 function setJump(big){
   const B=S.beh||{jh:1};
@@ -384,14 +399,14 @@ function doAttack(){
   const escaped=S.tension>=PINCH; S.tension=escaped?38:Math.max(0,S.tension-24);
   S.eleki=U.clamp(S.eleki+56,0,100);   // こうげき成功でエレキが大きくたまる
   S.mode='tire'; S.modeT=Math.max(S.modeT,1.0); S.hitFx=0.4; G.shake=8; Sound.SE.attack();
-  burst(S.fishX,S.fishY,16,{c:'#ffd34d',smax:6,lmax:0.8,rmax:6,glow:true}); toast(escaped?'こうげきでピンチ脱出！':'こうげき！');
+  burst(S.fishX,S.fishY,16,{c:'#ffd34d',smax:6,lmax:0.8,rmax:6,glow:true});
   return true;
 }
 function doEleki(){
   if(S.eleki<100||S.fishHP<=0) return false;
   const dmg=S.fishMax*0.36+55; S.fishHP-=dmg; S.eleki=0; S.tension=16;
   S.mode='tire'; S.modeT=1.6; S.elekiFx=0.7; G.shake=18; flash(0.7,'180,230,255'); Sound.SE.eleki();
-  burst(S.fishX,S.fishY,26,{c:'#9cf',smax:7,lmax:0.9,rmax:7,glow:true}); toast('⚡エレキアタック！⚡',2.0);
+  burst(S.fishX,S.fishY,26,{c:'#9cf',smax:7,lmax:0.9,rmax:7,glow:true});
   return true;
 }
 function updateFight(dt){
@@ -434,14 +449,14 @@ function updateFight(dt){
   const wasPinch=S.pinch; S.pinch=S.tension>=PINCH&&!koed;
   // ピンチ中は「救済エレキ」が自動でぐんぐんたまる → こうげき/エレキ成功でピンチ脱出
   if(S.pinch){ S.eleki+=dt*42; S.charge+=dt*30; }
-  if(S.pinch&&!wasPinch){ Sound.SE.warn(); toast('ピンチ！ エレキをためて反撃で脱出！',1.8); }
+  if(S.pinch&&!wasPinch){ Sound.SE.warn(); flash(0.28,'255,80,80'); }
 
   S.charge=U.clamp(S.charge,0,100); S.progress=U.clamp(S.progress,0,100); S.eleki=U.clamp(S.eleki,0,100);
 
   // 寄せの上限は「魚の弱り具合（HP）」で決まる：弱らせないと最後まで寄らない＝巻くだけでは釣れない
   const reach = koed?100:U.clamp(100-(S.fishHP/S.fishMax)*62*DF.reachMul,0,100);
   if(S.progress>reach) S.progress=reach;
-  if(!koed && S.progress>=reach-0.5 && reach<99 && Math.random()<0.012) toast('もう寄らない…こうげき/エレキで弱らせろ！',1.2);
+  if(!koed && S.progress>=reach-0.5 && reach<99 && Math.random()<0.012) burst(S.fishX,S.fishY,4,{c:'#ffd34d',smax:2,lmax:0.35,rmax:3,glow:true});
 
   if(S.tension>=100){ Sound.SE.snap(); G.shake=14; flash(0.5,'255,80,80');
     startEscape(S.fish, S.fishX, S.fishY, 'ラインが切れた！'); return; }
@@ -453,19 +468,25 @@ function updateFight(dt){
 
   if(S.fishHP<=0 && S.koTimer===0){
     if(S.boss && S.bossPhase<S.bossPhaseMax){ nextBossPhase(); }
-    else { S.fishHP=0; S.koTimer=0.001; Sound.SE.ko(); flash(0.5); toast('ダウン！ 巻き上げろ！',1.8); }
+    else { S.fishHP=0; S.koTimer=0.001; Sound.SE.ko(); flash(0.5); }
   }
   if(S.koTimer>0) S.koTimer+=dt;
   if(S.phaseFx>0) S.phaseFx-=dt;
 
-  // 位置：progressで左（キャラ側）へ寄る。ジャンプで上下。暴れ中は性格に応じて左右にダート。
-  const wig=(!koed&&S.mode==='run')?Math.sin(G.t*(6+B.rr*3))*22*B.da:0;
-  S.fishX=U.lerp(FAR_X,NEAR_X,S.progress/100)+wig;
+  // 位置：progressで左へ寄る。奥行き・潜行・バンクを混ぜ、横一列に見えないようにする。
+  const run = !koed&&S.mode==='run';
+  const depthWave=Math.sin(G.t*(2.1+B.da)+S.progress*0.05);
+  const sideWave=Math.sin(G.t*(5.5+B.rr*2.6)+S.modeT);
+  S.fishDepth=run?depthWave:depthWave*0.35;
+  S.fishScale=U.clamp(1+S.fishDepth*(run?0.22:0.1),0.78,1.28);
+  S.fishBank=U.lerp(S.fishBank,sideWave*(run?0.42:0.14)+(koed?0.7:0),dt*8);
+  const wig=run?sideWave*28*B.da:Math.sin(G.t*2.4)*5;
+  S.fishX=U.lerp(FAR_X,NEAR_X,S.progress/100)+wig+S.fishDepth*38;
   S.jumpT+=dt; const jk=U.clamp(S.jumpT/S.jumpDur,0,1);
   const arc=Math.sin(jk*Math.PI);
   const prevY=S.fishY;
   if(koed){ S.fishY=U.lerp(S.fishY, WL-18, dt*3); }
-  else{ S.fishY=U.lerp(S.jumpFrom,S.jumpTo,jk) - (S.mode==='run'?arc*40:arc*10); if(jk>=1) setJump(S.mode==='run'); }
+  else{ S.fishY=U.lerp(S.jumpFrom,S.jumpTo,jk) - (run?arc*48:arc*10) + S.fishDepth*46; if(jk>=1) setJump(S.mode==='run'); }
   if((prevY<WL)!==(S.fishY<WL)){ Sound.SE.splash(); burst(S.fishX,WL,12,{c:'#bff',smax:4,up:S.fishY<WL?2:1,lmax:0.5,rmax:4,g:0.06}); }
   if(!koed && S.mode==='run' && Math.random()<0.3) burst(S.fishX+U.rand(-20,20),S.fishY+U.rand(-10,10),2,{c:'rgba(255,255,255,.7)',smax:2,lmax:0.4,rmax:3,g:0.05});
 
@@ -611,16 +632,22 @@ function drawAngler(planet){
     // 体
     const bg=ctx.createLinearGradient(0,-26,0,30); bg.addColorStop(0,'#eef2f8'); bg.addColorStop(1,'#aeb8c6');
     ctx.fillStyle=bg; roundRect(ctx,-24,-14,48,52,16); ctx.fill();
+    ctx.fillStyle='#283348'; roundRect(ctx,-31,-4,12,36,6); ctx.fill();
     ctx.fillStyle=planet.accent; ctx.globalAlpha=0.85; roundRect(ctx,-10,4,20,9,4); ctx.fill(); ctx.globalAlpha=1;
+    ctx.fillStyle='rgba(0,0,0,.18)'; roundRect(ctx,-15,18,30,7,3); ctx.fill();
     // ヘルメット
     const hg=ctx.createRadialGradient(-8,-40,4,0,-34,28); hg.addColorStop(0,'#fff'); hg.addColorStop(1,'#c3ccd8');
     ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(0,-34,24,0,U.TAU); ctx.fill();
     const vg=ctx.createLinearGradient(0,-50,0,-20); vg.addColorStop(0,planet.accent); vg.addColorStop(1,'#0a1730');
     ctx.fillStyle=vg; ctx.beginPath(); ctx.ellipse(2,-34,15,13,0,0,U.TAU); ctx.fill();
     ctx.fillStyle='rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(-4,-40,5,3,-0.5,0,U.TAU); ctx.fill();
+    ctx.strokeStyle=planet.accent; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,-34,27,-0.35,Math.PI+0.35); ctx.stroke();
+    // ブーツ
+    ctx.fillStyle='#283348'; roundRect(ctx,-24,34,18,8,4); ctx.fill(); roundRect(ctx,6,34,18,8,4); ctx.fill();
     // 腕（竿を持つ）
     ctx.strokeStyle='#cfd7e2'; ctx.lineWidth=10; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(10,2); ctx.lineTo(28,-12); ctx.stroke();
+    ctx.fillStyle=planet.accent; ctx.beginPath(); ctx.arc(29,-12,6,0,U.TAU); ctx.fill();
     ctx.restore();
   }
 
@@ -684,19 +711,21 @@ function drawFloat(){
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y-6,8,Math.PI,0); ctx.fill();
   ctx.fillStyle='#ff4040'; ctx.beginPath(); ctx.arc(x,y-6,8,0,Math.PI); ctx.fill();
   ctx.fillStyle='#ffcf2e'; ctx.beginPath(); ctx.arc(x,y-15,3,0,U.TAU); ctx.fill();
-  // ラベル
-  if(label==='ピクッ'){ ctx.fillStyle='#ffe98a'; ctx.font='bold 20px sans-serif'; ctx.textAlign='center'; ctx.fillText('ピクッ',x,WL-36); ctx.textAlign='left'; }
-  else if(label==='！！'){ const s=1+Math.sin(G.t*24)*0.18; ctx.save(); ctx.translate(x,WL-46); ctx.scale(s,s);
-    ctx.fillStyle='#ffea00'; ctx.font='bold 44px sans-serif'; ctx.textAlign='center'; ctx.shadowColor='#fa0'; ctx.shadowBlur=18;
-    ctx.fillText('！',0,0); ctx.restore(); ctx.shadowBlur=0; ctx.textAlign='left'; }
+  if(label==='ピクッ'){ ctx.strokeStyle='rgba(255,233,138,.65)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(x,WL-34,10+Math.sin(G.t*20)*3,0,U.TAU); ctx.stroke(); }
+  else if(label==='！！') drawBangIcon(x,WL-48,1+Math.sin(G.t*24)*0.12,'#ffea00');
 }
 
 // ---- ファイトの魚（空中で暴れる）----
 function drawFightFish(){
   const koed=S.fishHP<=0, x=S.fishX, y=S.fishY, dir=-1;
   const wild=(!koed&&S.mode==='run')?1:0.3;
-  const tilt=Math.sin(G.t*7)*0.18*wild + (koed?0.9:0);
-  const sc=2.2*S.fish.size;
+  const tilt=S.fishBank + Math.sin(G.t*7)*0.08*wild + (koed?0.7:0);
+  const sc=2.2*S.fish.size*S.fishScale;
+  ctx.save();
+  ctx.globalAlpha=0.25;
+  ctx.fillStyle='#00111e';
+  ctx.beginPath(); ctx.ellipse(x,y+sc*18,sc*30*S.fishScale,sc*8,0,0,U.TAU); ctx.fill();
+  ctx.restore();
   // エレキ充電中の合図（満タンで自動発動するので、たまっていく様子を見せる）
   if(S.eleki>=78&&!koed){ ctx.strokeStyle=`rgba(150,210,255,${(0.3+0.5*(S.eleki-78)/22)*(0.6+0.4*Math.sin(G.t*20))})`; ctx.lineWidth=2; ctx.shadowColor='#9cf'; ctx.shadowBlur=10;
     for(let i=0;i<4;i++){ const a=G.t*3+i*1.6; ctx.beginPath(); let lx=x+Math.cos(a)*60,ly=y+Math.sin(a)*42;
@@ -717,8 +746,14 @@ function drawFightFish(){
 //  HUD
 // ===================================================================
 function drawTop(planet){
-  ctx.fillStyle='rgba(0,0,0,.4)'; ctx.fillRect(0,0,W,40);
-  ctx.fillStyle=planet.accent; ctx.font='bold 18px sans-serif'; ctx.textAlign='left'; ctx.fillText('🪐 '+planet.name,14,26);
+  const g=ctx.createLinearGradient(0,0,W,0);
+  g.addColorStop(0,'rgba(0,0,0,.68)');
+  g.addColorStop(0.45,'rgba(4,14,34,.54)');
+  g.addColorStop(1,'rgba(0,0,0,.68)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,44);
+  ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.beginPath(); ctx.moveTo(0,43); ctx.lineTo(W,43); ctx.stroke();
+  ctx.fillStyle=planet.accent; ctx.font='bold 18px sans-serif'; ctx.textAlign='left'; ctx.fillText('🪐 '+planet.name,16,28);
+  ctx.fillStyle='rgba(255,255,255,.18)'; ctx.beginPath(); ctx.arc(8,22,3,0,U.TAU); ctx.fill();
   ctx.fillStyle='#fff'; ctx.textAlign='right'; ctx.font='bold 15px sans-serif';
   let lab;
   const rest=Math.max(0,QUOTA[G.planet]-G.planetProgress[G.planet]);
@@ -727,73 +762,107 @@ function drawTop(planet){
   else lab=`ヌシまで あと ${rest}匹`;
   ctx.fillText(lab,W-14,25); ctx.textAlign='left';
 }
-function bar(x,y,w,h,v,col,label){ roundRect(ctx,x,y,w,h,h/2); ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fill();
-  roundRect(ctx,x,y,w*U.clamp(v,0,1),h,h/2); ctx.fillStyle=col; ctx.fill();
-  if(label){ ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='left'; ctx.fillText(label,x,y-5); } }
-function bigPrompt(text,col){ const s=1+Math.sin(G.t*10)*0.06; ctx.save(); ctx.translate(W/2,H-92); ctx.scale(s,s);
-  ctx.font='bold 22px sans-serif'; const w=ctx.measureText(text).width+44;
-  ctx.fillStyle='rgba(0,0,0,.5)'; roundRect(ctx,-w/2,-26,w,40,20); ctx.fill();
-  ctx.fillStyle=col; ctx.textAlign='center'; ctx.fillText(text,0,2); ctx.restore(); ctx.textAlign='left'; }
+function bar(x,y,w,h,v,col,label){
+  const k=U.clamp(v,0,1);
+  roundRect(ctx,x-2,y-2,w+4,h+4,(h+4)/2); ctx.fillStyle='rgba(0,0,0,.42)'; ctx.fill();
+  roundRect(ctx,x,y,w,h,h/2); ctx.fillStyle='rgba(255,255,255,.13)'; ctx.fill();
+  if(k>0){
+    const g=ctx.createLinearGradient(x,y,x+w,y);
+    g.addColorStop(0,col); g.addColorStop(1,'#fff4a8');
+    roundRect(ctx,x,y,w*k,h,h/2); ctx.fillStyle=g; ctx.fill();
+  }
+  ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=1; roundRect(ctx,x,y,w,h,h/2); ctx.stroke();
+  if(label){ ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='left'; ctx.fillText(label,x,y-6); }
+}
+function drawBangIcon(x,y,s=1,col='#ffea00'){
+  ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
+  ctx.shadowColor=col; ctx.shadowBlur=16; ctx.fillStyle=col;
+  ctx.beginPath(); ctx.moveTo(0,-24); ctx.lineTo(18,12); ctx.lineTo(-18,12); ctx.closePath(); ctx.fill();
+  ctx.shadowBlur=0; ctx.fillStyle='#2b1800'; ctx.fillRect(-3,-11,6,15); ctx.beginPath(); ctx.arc(0,9,3,0,U.TAU); ctx.fill();
+  ctx.restore();
+}
+function drawReelIcon(cx,cy,r,col,active){
+  ctx.save(); ctx.globalAlpha=active?1:0.45;
+  ctx.strokeStyle=col; ctx.lineWidth=5; ctx.lineCap='round';
+  ctx.beginPath(); ctx.arc(cx,cy,r,-0.4,Math.PI*1.55); ctx.stroke();
+  const ea=Math.PI*1.55, ex=cx+Math.cos(ea)*r, ey=cy+Math.sin(ea)*r;
+  ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ex-11,ey-8); ctx.lineTo(ex+8,ey-12); ctx.closePath(); ctx.fill();
+  const ang=G.t*5.5; ctx.fillStyle='#fff'; ctx.shadowColor='#fff'; ctx.shadowBlur=8;
+  ctx.beginPath(); ctx.arc(cx+Math.cos(ang)*r,cy+Math.sin(ang)*r,7,0,U.TAU); ctx.fill();
+  ctx.restore(); ctx.shadowBlur=0;
+}
+function drawStopIcon(cx,cy,s,col){
+  ctx.save(); ctx.translate(cx,cy); ctx.scale(s,s);
+  ctx.fillStyle=col; ctx.shadowColor=col; ctx.shadowBlur=10;
+  ctx.beginPath();
+  for(let i=0;i<8;i++){ const a=-Math.PI/8+i*Math.PI/4, r=i%2?21:25; ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r); }
+  ctx.closePath(); ctx.fill();
+  ctx.shadowBlur=0; ctx.fillStyle='#210a0a'; ctx.fillRect(-9,-13,6,26); ctx.fillRect(3,-13,6,26);
+  ctx.restore();
+}
+function drawBoltIcon(cx,cy,s,col){
+  ctx.save(); ctx.translate(cx,cy); ctx.scale(s,s);
+  ctx.fillStyle=col; ctx.shadowColor=col; ctx.shadowBlur=12;
+  ctx.beginPath(); ctx.moveTo(7,-25); ctx.lineTo(-12,2); ctx.lineTo(2,2); ctx.lineTo(-8,25); ctx.lineTo(15,-8); ctx.lineTo(1,-8); ctx.closePath(); ctx.fill();
+  ctx.restore(); ctx.shadowBlur=0;
+}
+function drawHookIcon(cx,cy,s,col){
+  ctx.save(); ctx.translate(cx,cy); ctx.scale(s,s);
+  ctx.strokeStyle=col; ctx.lineWidth=5; ctx.lineCap='round'; ctx.shadowColor=col; ctx.shadowBlur=10;
+  ctx.beginPath(); ctx.moveTo(0,-24); ctx.lineTo(0,8); ctx.quadraticCurveTo(0,26,17,17); ctx.stroke();
+  ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(15,17); ctx.lineTo(25,13); ctx.lineTo(20,25); ctx.closePath(); ctx.fill();
+  ctx.restore(); ctx.shadowBlur=0;
+}
 
-function waitHint(){ ctx.fillStyle='#cde'; ctx.font='bold 18px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('アタリを待て…',W/2,110); ctx.textAlign='left';
-  hint('ウキがしずんだら合図／タップで投げ直し','ウキがしずんだら合図／×で投げ直し'); }
+function waitHint(){
+  const x=W/2,y=104,a=0.35+0.35*Math.sin(G.t*3);
+  ctx.strokeStyle=`rgba(190,235,255,${a})`; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.ellipse(x,y,30+Math.sin(G.t*2)*4,10,0,0,U.TAU); ctx.stroke();
+}
 function hookHint(){
-  if(hookPhase()==='real') bigPrompt(touchMode()?'いま！タップで合わせろ！':'いま！ SPACE で合わせろ！','#ffea00');
-  else bigPrompt('前アタリ…ガクッ！まで待て','#bcd');
-  hint('本アタリ（深く沈む！）で合わせる。早合わせはバラシ','本アタリ（深く沈む！）でSPACE。早押しはバラシ');
+  if(hookPhase()==='real') drawHookIcon(W/2,H-94,1.2+Math.sin(G.t*20)*0.08,'#ffea00');
+  else {
+    ctx.globalAlpha=0.4; drawHookIcon(W/2,H-94,0.95,'#9fb6c9'); ctx.globalAlpha=1;
+  }
 }
 
 function fightHUD(){
   // 魚の名前（スタミナゲージは表示しない）＋難易度バッジ
   ctx.textAlign='center';
-  ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif';
-  ctx.shadowColor='#000'; ctx.shadowBlur=6; ctx.fillText(S.fish.name, W/2, 64); ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(0,0,0,.45)'; roundRect(ctx,W/2-210,50,420,40,10); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.14)'; roundRect(ctx,W/2-210,50,420,40,10); ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.font='bold 18px sans-serif';
+  ctx.shadowColor='#000'; ctx.shadowBlur=6; ctx.fillText(S.fish.name, W/2, 76); ctx.shadowBlur=0;
   let badge='[ '+D().name+' ]';
-  if(S.boss) badge+='  ✦ 第'+['','一','二','三'][S.bossPhase]+'形態 / 全'+S.bossPhaseMax+'形態';
-  ctx.fillStyle=S.boss&&S.bossPhase===S.bossPhaseMax?'#ff4d6b':D().col; ctx.font='bold 12px sans-serif'; ctx.fillText(badge, W/2, 44);
+  if(S.bossPhaseMax>1) badge+='  ✦ 第'+['','一','二','三'][S.bossPhase]+'形態 / 全'+S.bossPhaseMax+'形態';
+  else if(S.boss) badge+='  ✦ ヌシ';
+  ctx.fillStyle=S.boss&&S.bossPhase===S.bossPhaseMax&&S.bossPhaseMax>1?'#ff4d6b':D().col; ctx.font='bold 12px sans-serif'; ctx.fillText(badge, W/2, 44);
   ctx.textAlign='left';
   // テンション（横・危険ゾーン付き）
-  const tx=W/2-170,ty=82,tw=340,th=14;
+  const tx=W/2-170,ty=108,tw=340,th=14;
   roundRect(ctx,tx,ty,tw,th,7); ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fill();
   const tv=S.tension/100, tcol=tv>0.8?'#ff3b3b':(tv>0.6?'#ffb13b':'#3bff7a');
   roundRect(ctx,tx,ty,tw*tv,th,7); ctx.fillStyle=tcol; ctx.fill();
-  ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.fillText('テンション（切れたらアウト）',tx,ty-5);
   ctx.fillStyle='#ff3b3b'; ctx.fillRect(tx+tw*0.8-1,ty-2,2,th+4);
   // こうげき／エレキ ゲージ（役割の違いを見せる）
   const cv=S.charge/100, ev=S.eleki/100;
-  bar(W/2-170,H-66,165,10, cv, cv>=1?'#ffd34d':'#cfa030', 'こうげき'+(cv>=1?' READY!':''));
-  bar(W/2+5,  H-66,165,10, ev, ev>=1?'#9cf':'#46618a', 'エレキ⚡'+(ev>=1?' READY!':'（成功でたまる）'));
+  bar(W/2-170,H-66,165,10, cv, cv>=1?'#ffd34d':'#cfa030');
+  drawHookIcon(W/2-188,H-61,0.42,cv>=1?'#ffd34d':'#8e7a38');
+  bar(W/2+5,  H-66,165,10, ev, ev>=1?'#9cf':'#46618a');
+  drawBoltIcon(W/2-12,H-61,0.44,ev>=1?'#9cf':'#58708c');
   // 寄せ（LANDING）
-  bar(W/2-170,H-44,340,12,S.progress/100,'#ffd34d','あと'+Math.max(0,Math.round(100-S.progress))+'%で GET');
-
-  // 大きな状況プロンプト
-  if(S.fishHP<=0) bigPrompt('ダウン！ 巻き上げろ！','#7fff8a');
-  else if(S.eleki>=78) bigPrompt('⚡エレキ充電完了でドカン！','#9cf');
-  else if(S.pinch) bigPrompt('ピンチ！ 巻くのを止めて耐えろ！','#ff6b6b');
-  else if(S.mode==='run') bigPrompt('ひっぱられてる！ 巻くのを止めて！','#ffb13b');
-  else bigPrompt(touchMode()?'いまだ！ なぞって巻け！':'いまだ！ 巻け！','#7fff8a');
-
-  if(S.fishHP>0) drawReelGuide();
-  hint('なぞってぐるぐる巻く／タップ=こうげき(or エレキ)','方向キー=巻く SPACE=こうげき/エレキ');
+  bar(W/2-170,H-42,340,12,S.progress/100,'#ffd34d');
+  drawFightCue();
 }
-// 下部に「ぐるぐる巻く」モーションをオーバレイ表示
-function drawReelGuide(){
-  const cx=96, cy=H-138, r=26;
-  const active=(S.mode!=='run');     // おとなしい時＝巻きどき
-  ctx.save(); ctx.globalAlpha=active?0.95:0.4;
-  // 円弧の矢印
-  ctx.strokeStyle=active?'#7fff8a':'#9cf'; ctx.lineWidth=5; ctx.lineCap='round';
-  ctx.beginPath(); ctx.arc(cx,cy,r,-0.4,Math.PI*1.5); ctx.stroke();
-  // 矢じり（終点）
-  const ea=Math.PI*1.5, ex=cx+Math.cos(ea)*r, ey=cy+Math.sin(ea)*r;
-  ctx.fillStyle=active?'#7fff8a':'#9cf';
-  ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ex-10,ey-9); ctx.lineTo(ex+9,ey-10); ctx.closePath(); ctx.fill();
-  // 周回する指（白丸）
-  const ang=G.t*5; const dx=cx+Math.cos(ang)*r, dy=cy+Math.sin(ang)*r;
-  ctx.fillStyle='#fff'; ctx.shadowColor='#fff'; ctx.shadowBlur=8; ctx.beginPath(); ctx.arc(dx,dy,8,0,U.TAU); ctx.fill(); ctx.shadowBlur=0;
-  ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
-  ctx.fillText(touchMode()?'ぐるぐる巻く':'方向キーで巻く',cx,cy+r+18); ctx.textAlign='left';
+function drawFightCue(){
+  const cx=W/2, cy=H-104;
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,.38)'; roundRect(ctx,cx-48,cy-38,96,76,18); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.16)'; roundRect(ctx,cx-48,cy-38,96,76,18); ctx.stroke();
+  if(S.fishHP<=0) drawReelIcon(cx,cy,28,'#7fff8a',true);
+  else if(S.eleki>=78) drawBoltIcon(cx,cy,1.25,'#9cf');
+  else if(S.pinch||S.mode==='run') drawStopIcon(cx,cy,1,S.pinch?'#ff4d6b':'#ffb13b');
+  else drawReelIcon(cx,cy,28,'#7fff8a',true);
   ctx.restore();
 }
 function catchHUD(){
@@ -914,8 +983,15 @@ function drawToast(){ if(!G.msg) return; const a=U.clamp(G.msgT*2,0,1); ctx.glob
   roundRect(ctx,W/2-w/2,52,w,34,17); ctx.fillStyle='rgba(0,0,0,.72)'; ctx.fill();
   ctx.fillStyle='#ffe98a'; ctx.fillText(G.msg,W/2,74); ctx.textAlign='left'; ctx.globalAlpha=1; }
 
-function boot(){ const lb=document.getElementById('loadbar'); if(lb) lb.style.width='100%';
-  setTimeout(()=>{ const ld=document.getElementById('loading'); if(ld) ld.classList.add('hidden'); G.state='TITLE'; },300);
-  requestAnimationFrame(loop); }
+function boot(){
+  const lb=document.getElementById('loadbar');
+  if(lb) lb.style.width='35%';
+  const assets=(typeof loadFishAssets==='function')?loadFishAssets():Promise.resolve();
+  assets.finally(()=>{
+    if(lb) lb.style.width='100%';
+    setTimeout(()=>{ const ld=document.getElementById('loading'); if(ld) ld.classList.add('hidden'); G.state='TITLE'; },240);
+  });
+  requestAnimationFrame(loop);
+}
 boot();
 })();
