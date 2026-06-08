@@ -96,7 +96,10 @@ const Input = (() => {
     }
     let kLX=0,kLY=0,kRX=0,kRY=0;
     if(keys['KeyA'])kLX-=1; if(keys['KeyD'])kLX+=1; if(keys['KeyW'])kLY-=1; if(keys['KeyS'])kLY+=1;
-    if(keys['ArrowLeft'])kRX-=1; if(keys['ArrowRight'])kRX+=1; if(keys['ArrowUp'])kRY-=1; if(keys['ArrowDown'])kRY+=1;
+    if(keys['ArrowLeft']){ kLX-=1; kRX-=1; }
+    if(keys['ArrowRight']){ kLX+=1; kRX+=1; }
+    if(keys['ArrowUp']){ kLY-=1; kRY-=1; }
+    if(keys['ArrowDown']){ kLY+=1; kRY+=1; }
 
     state.LX=LX||kLX; state.LY=LY||kLY; state.RX=RX||kRX; state.RY=RY||kRY;
     state.circle  =circle  ||keys['Space'];

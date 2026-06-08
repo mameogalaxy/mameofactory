@@ -8,6 +8,11 @@
 const cv = document.getElementById('game');
 const ctx = cv.getContext('2d');
 const W = cv.width, H = cv.height;
+const ASSETS = {
+  angler: Object.assign(new Image(), { src:'assets/angler.png' }),
+};
+let anglerReady=false;
+ASSETS.angler.onload=()=>{ anglerReady=true; };
 
 const WL = 372;        // 水面の高さ
 const AX = 150;        // アングラーの立ち位置X
@@ -171,7 +176,7 @@ function enterPlanet(){
   Sound.SE.select(); G.planet=G.selCursor; resetSwimmers();
   resetCast(); G.state='CAST'; G.fade=1;
   if(isNushiTime()) toast('✦ この星のヌシ「'+nushiForPlanet(G.planet).name+'」が潜んでいる…！',3.4);
-  else toast(PLANETS[G.planet].name+'に到着！ '+(touchMode()?'長押しでパワーをためて離すと投げる':'○長押しでパワー、離して投げる'),3.0);
+  else toast(PLANETS[G.planet].name+'に到着！ '+(touchMode()?'長押しでパワーをためて離すと投げる':'SPACE長押しでパワー、離して投げる'),3.0);
 }
 function resetCast(){ S.power=0.08; S.powerDir=1; S.charging=false; S.aimX=AX+200; }
 
@@ -401,7 +406,7 @@ function updateFight(dt){
   // 入力 → reel / strike
   let reelAmt=0, strike=false;
   if(IN.touch.active){ if(IN.touch.down) reelAmt=U.clamp(0.7+IN.touch.speed*0.26,0,2.8); if(IN.touch.tap) strike=true; }
-  else{ const keyReel=(IN.RY<-0.3||IN.RX!==0||IN.circle&&false)?1:0; const spin=Input.reelSpin(IN.RX,IN.RY);
+  else{ const keyReel=(Math.abs(IN.RY)>0.3||Math.abs(IN.RX)>0.3)?1:0; const spin=Input.reelSpin(IN.RX,IN.RY);
     reelAmt=(spin>0.6)?Math.min(2.2,spin):(keyReel?1.5:0);
     if(IN.p.square&&doAttack()){} if(IN.p.triangle&&doEleki()){} if(IN.p.circle){ if(!doEleki())doAttack(); } }
   const reeling=reelAmt>0.05;
@@ -555,7 +560,7 @@ function render(){
   // HUD
   drawTop(planet);
   if(FISHING.includes(G.state)) drawBackButton();
-  if(G.state==='CAST') hint('長押しでパワーをためて、離して投げる','○長押しでパワー→離して投げる');
+  if(G.state==='CAST') hint('長押しでパワーをためて、離して投げる','SPACE長押しでパワー→離して投げる');
   if(G.state==='WAIT') waitHint();
   if(G.state==='HOOK') hookHint();
   if(G.state==='FIGHT') fightHUD();
@@ -590,7 +595,7 @@ function drawWater(planet){
     ctx.globalAlpha=a*0.5; ctx.fillRect(x,WL-1,3,2); } ctx.globalAlpha=1;
 }
 
-// ---- アングラー（手続き生成のスペース漁師）----
+// ---- アングラー ----
 function drawAngler(planet){
   const x=AX, y=WL;
   // 足場（小惑星）
@@ -599,21 +604,25 @@ function drawAngler(planet){
   ctx.fillStyle='rgba(255,255,255,.08)'; ctx.beginPath(); ctx.ellipse(x-16,y+24,22,8,0,0,U.TAU); ctx.fill();
 
   const bob=Math.sin(G.t*2)*2;
-  ctx.save(); ctx.translate(x,y-30+bob);
-  // 体
-  const bg=ctx.createLinearGradient(0,-26,0,30); bg.addColorStop(0,'#eef2f8'); bg.addColorStop(1,'#aeb8c6');
-  ctx.fillStyle=bg; roundRect(ctx,-24,-14,48,52,16); ctx.fill();
-  ctx.fillStyle=planet.accent; ctx.globalAlpha=0.85; roundRect(ctx,-10,4,20,9,4); ctx.fill(); ctx.globalAlpha=1;
-  // ヘルメット
-  const hg=ctx.createRadialGradient(-8,-40,4,0,-34,28); hg.addColorStop(0,'#fff'); hg.addColorStop(1,'#c3ccd8');
-  ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(0,-34,24,0,U.TAU); ctx.fill();
-  const vg=ctx.createLinearGradient(0,-50,0,-20); vg.addColorStop(0,planet.accent); vg.addColorStop(1,'#0a1730');
-  ctx.fillStyle=vg; ctx.beginPath(); ctx.ellipse(2,-34,15,13,0,0,U.TAU); ctx.fill();
-  ctx.fillStyle='rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(-4,-40,5,3,-0.5,0,U.TAU); ctx.fill();
-  // 腕（竿を持つ）
-  ctx.strokeStyle='#cfd7e2'; ctx.lineWidth=10; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(10,2); ctx.lineTo(28,-12); ctx.stroke();
-  ctx.restore();
+  if(anglerReady){
+    ctx.drawImage(ASSETS.angler, x-78, y-198+bob, 150, 220);
+  }else{
+    ctx.save(); ctx.translate(x,y-30+bob);
+    // 体
+    const bg=ctx.createLinearGradient(0,-26,0,30); bg.addColorStop(0,'#eef2f8'); bg.addColorStop(1,'#aeb8c6');
+    ctx.fillStyle=bg; roundRect(ctx,-24,-14,48,52,16); ctx.fill();
+    ctx.fillStyle=planet.accent; ctx.globalAlpha=0.85; roundRect(ctx,-10,4,20,9,4); ctx.fill(); ctx.globalAlpha=1;
+    // ヘルメット
+    const hg=ctx.createRadialGradient(-8,-40,4,0,-34,28); hg.addColorStop(0,'#fff'); hg.addColorStop(1,'#c3ccd8');
+    ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(0,-34,24,0,U.TAU); ctx.fill();
+    const vg=ctx.createLinearGradient(0,-50,0,-20); vg.addColorStop(0,planet.accent); vg.addColorStop(1,'#0a1730');
+    ctx.fillStyle=vg; ctx.beginPath(); ctx.ellipse(2,-34,15,13,0,0,U.TAU); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(-4,-40,5,3,-0.5,0,U.TAU); ctx.fill();
+    // 腕（竿を持つ）
+    ctx.strokeStyle='#cfd7e2'; ctx.lineWidth=10; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(10,2); ctx.lineTo(28,-12); ctx.stroke();
+    ctx.restore();
+  }
 
   // 竿
   const hand=handPos(), tip=rodTip();
@@ -730,9 +739,9 @@ function waitHint(){ ctx.fillStyle='#cde'; ctx.font='bold 18px sans-serif'; ctx.
   ctx.fillText('アタリを待て…',W/2,110); ctx.textAlign='left';
   hint('ウキがしずんだら合図／タップで投げ直し','ウキがしずんだら合図／×で投げ直し'); }
 function hookHint(){
-  if(hookPhase()==='real') bigPrompt(touchMode()?'いま！タップで合わせろ！':'いま！ ○ で合わせろ！','#ffea00');
+  if(hookPhase()==='real') bigPrompt(touchMode()?'いま！タップで合わせろ！':'いま！ SPACE で合わせろ！','#ffea00');
   else bigPrompt('前アタリ…ガクッ！まで待て','#bcd');
-  hint('本アタリ（深く沈む！）で合わせる。早合わせはバラシ','本アタリ（深く沈む！）で○。早押しはバラシ');
+  hint('本アタリ（深く沈む！）で合わせる。早合わせはバラシ','本アタリ（深く沈む！）でSPACE。早押しはバラシ');
 }
 
 function fightHUD(){
@@ -766,7 +775,7 @@ function fightHUD(){
   else bigPrompt(touchMode()?'いまだ！ なぞって巻け！':'いまだ！ 巻け！','#7fff8a');
 
   if(S.fishHP>0) drawReelGuide();
-  hint('なぞってぐるぐる巻く／タップ=こうげき(or エレキ)','方向キー=巻く ○=こうげき/エレキ');
+  hint('なぞってぐるぐる巻く／タップ=こうげき(or エレキ)','方向キー=巻く SPACE=こうげき/エレキ');
 }
 // 下部に「ぐるぐる巻く」モーションをオーバレイ表示
 function drawReelGuide(){
@@ -795,7 +804,7 @@ function catchHUD(){
   ctx.fillStyle='#ffd34d'; ctx.font='bold 46px sans-serif'; ctx.textAlign='center'; ctx.shadowColor='#ffd34d'; ctx.shadowBlur=20;
   ctx.fillText('GET!',W/2,140); ctx.shadowBlur=0;
   ctx.fillStyle='#fff'; ctx.font='bold 24px sans-serif'; ctx.fillText(S.fish.name,W/2,176);
-  if(S.catchAnim>0.8){ ctx.fillStyle='#9fd'; ctx.font='16px sans-serif'; ctx.fillText(touchMode()?'タップで確認':'○ で確認',W/2,H-40); }
+  if(S.catchAnim>0.8){ ctx.fillStyle='#9fd'; ctx.font='16px sans-serif'; ctx.fillText(touchMode()?'タップで確認':'SPACE で確認',W/2,H-40); }
   ctx.textAlign='left';
 }
 function hint(touchText,padText){ const t=touchMode()?touchText:padText;
@@ -814,7 +823,7 @@ function resultScreen(){
   pulseC((d.boss?'結果へ':'つづける'),H-60,'#ffd34d'); ctx.textAlign='left';
 }
 function pulseC(text,y,col){ const s=1+Math.sin(G.t*8)*0.06; ctx.save(); ctx.translate(W/2,y); ctx.scale(s,s);
-  ctx.fillStyle=col; ctx.font='bold 20px sans-serif'; ctx.textAlign='center'; ctx.fillText((touchMode()?'タップで':'○ で')+text,0,0); ctx.restore(); }
+  ctx.fillStyle=col; ctx.font='bold 20px sans-serif'; ctx.textAlign='center'; ctx.fillText((touchMode()?'タップで':'SPACE で')+text,0,0); ctx.restore(); }
 function clearScreen(){
   ctx.fillStyle='rgba(3,10,30,.9)'; ctx.fillRect(0,0,W,H); ctx.textAlign='center';
   const a=U.ease(U.clamp(S.clearAnim,0,1));
@@ -897,7 +906,7 @@ function renderSelect(){
   ctx.fillStyle='rgba(255,255,255,.5)'; ctx.font='bold 40px sans-serif'; ctx.fillText('‹',cx-r-50,cy+14); ctx.fillText('›',cx+r+50,cy+14);
   for(let i=0;i<PLANETS.length;i++){ const dx=cx-(PLANETS.length-1)*14+i*28; ctx.beginPath(); ctx.arc(dx,H-46,7,0,U.TAU);
     ctx.fillStyle=i===G.selCursor?'#fff':(i<G.unlocked?'#6ad':'#444'); ctx.fill(); }
-  ctx.fillStyle='#789'; ctx.font='13px sans-serif'; ctx.fillText(touchMode()?'スワイプで選択・中央タップで出発':'← → で選択 ○:出発 ×:タイトル',W/2,H-18); ctx.textAlign='left';
+  ctx.fillStyle='#789'; ctx.font='13px sans-serif'; ctx.fillText(touchMode()?'スワイプで選択・中央タップで出発':'← → で選択 SPACE:出発 Z:タイトル',W/2,H-18); ctx.textAlign='left';
 }
 
 function drawToast(){ if(!G.msg) return; const a=U.clamp(G.msgT*2,0,1); ctx.globalAlpha=a;
